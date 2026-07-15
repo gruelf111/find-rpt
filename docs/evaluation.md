@@ -4,7 +4,7 @@ Evaluation date: 2026-07-16
 
 ## Scope
 
-This evaluation covers only deterministic report retrieval from Bloomberg ticker, filename date, and filename broker. Summarization, claim citations, charts, and email drafting remain out of scope.
+This evaluation covers deterministic report retrieval and the PDF evidence layer. Summarization, estimate extraction, claim selection/highlighting, charts, and email drafting remain out of scope.
 
 The evaluation dataset contains query metadata and expected local filenames only. This document contains no report text, extracted passages, analyst contact data, report screenshots, or PDF-derived artifacts.
 
@@ -16,7 +16,9 @@ Command:
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-Result: **21 tests passed; 0 failed; 0 skipped.**
+Original retrieval milestone result: **21 tests passed; 0 failed; 0 skipped.**
+
+Pre-commit evidence-layer review result: **28 tests passed; 0 failed; 0 skipped.**
 
 Coverage includes:
 
@@ -67,3 +69,23 @@ Result: **11/11 expected PDFs selected.**
 - Broker normalization can theoretically collapse punctuation-only name differences.
 - `GY`/`GR` equivalence is specific to this supplied project fixture.
 - Confidence thresholds are conservative policy choices validated on this small evaluation set, not statistically calibrated probabilities.
+- Evidence extraction requires an embedded text layer and does not perform OCR.
+- Reading order is PyMuPDF's deterministic sorted block order, not semantic table reconstruction.
+- Text boxes extending beyond the page boundary are clipped; degenerate boxes are omitted.
+- Stable IDs intentionally change if the PDF bytes or supported parser behavior changes.
+
+## Evidence-layer corpus validation
+
+The actual `find-rpt evidence` locator path was run twice for each case below. Only safe metadata is recorded; no report text, coordinates, analyst details, screenshots, or evidence JSON was persisted. `Filename hash` is SHA-256 over the local filename, truncated to 16 hexadecimal characters; it is not a report-content hash.
+
+| Broker/layout | Filename hash | Pages | Blocks | Page numbers | Boxes in bounds | Repeated IDs |
+| --- | --- | ---: | ---: | --- | --- | --- |
+| ABG Sundal Collier | `d209c20a7c723619` | 8 | 177 | Pass | Pass | Pass |
+| BofA Global Research | `8ffa32a9668e1c31` | 11 | 187 | Pass | Pass | Pass |
+| J.P. Morgan | `1089e822e49c16df` | 11 | 152 | Pass | Pass | Pass |
+| Nordea Equity Research | `5dd058976c22d8ac` | 9 | 158 | Pass | Pass | Pass |
+| Kepler Cheuvreux | `7233feedd9853ff6` | 11 | 281 | Pass | Pass | Pass |
+
+Manual review confirmed that public page numbers follow the PDF's one-based sequence and block order follows a sensible header/body progression across the sampled layouts. Dense multi-column tables remain a known semantic-order limitation.
+
+Source integrity review found no tracked PDF, no PDF modification produced by the commands, and no source write path in the implementation. The candidate diff contains no extracted proprietary passage, cached corpus text, absolute workstation path, or large generated artifact.

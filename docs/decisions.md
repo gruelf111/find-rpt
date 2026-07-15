@@ -49,3 +49,33 @@ Field labels must look like compact field/table headers, not merely contain word
 ### Portability and residual assumptions
 
 Serialized candidate paths use `/` and omit absolute workstation paths. Symlink candidates are rejected. Ranking scores and the 20-point margin are conservative hand-set policy values, not calibrated probabilities. The remaining material limitation is multi-security report identity: a strongly labelled non-primary ticker could still look authoritative without company-entity resolution.
+
+## 2026-07-16 - PDF evidence layer
+
+### PyMuPDF block model
+
+The evidence layer runs only after deterministic retrieval selects one report. It uses PyMuPDF text blocks because corpus discovery found usable positioned text across representative layouts and no concrete reason to add OCR or another layout engine. Retrieval remains on `pypdf`; evidence extraction is a separate adapter so selection behavior does not change.
+
+The public schema is nested as document, pages, reading-order blocks, and words. Each non-empty text block retains a stable ID, exact extracted text, bounded PDF-point box, reliable `text` type, PyMuPDF source block number, and word boxes with zero-based PyMuPDF line/word metadata. Page boundaries and dimensions remain explicit. Images are not evidence blocks. PyMuPDF's internal zero-based page index is converted at the adapter boundary; API and JSON page numbers are one-based.
+
+Alternative considered: words or individual spans. Rejected for this slice because they create much noisier references; page-scoped blocks are the smallest useful unit for later passage selection while preserving exact geometry.
+
+### Stable identity and resolution
+
+A document ID is SHA-256 over the PDF bytes, so it is reproducible without depending on an absolute path. A block ID combines that document ID, one-based page, reading-order position, source block number, rounded coordinates, and text. Repeated extraction of unchanged bytes therefore produces the same identifier and ordering, while changed content or geometry invalidates it.
+
+Alternative considered: using the corpus filename hash as document identity. Rejected because explicit-path debugging PDFs may not follow the corpus naming convention and filenames are not authoritative content hashes.
+
+Some real PDFs contain text boxes extending just beyond their media box. Coordinates are clipped to the page boundary and degenerate boxes are omitted so downstream consumers always receive valid rectangles. No OCR fallback is attempted: an unreadable, encrypted, textless, or invalid-page request raises a distinct evidence error.
+
+The JSON source path remains relative and portable. Extraction writes no files and never annotates or rewrites a PDF. A future citation viewer may consume these coordinates, but viewer generation, estimate extraction, and model summarization remain out of scope.
+
+### Verification
+
+Tests cover a two-page synthetic PDF, stable JSON and IDs, word coordinates, page filtering, CLI direct-path extraction, malformed/unreadable/encrypted/textless input, and every block/page reference across ABG, BofA, J.P. Morgan, Nordea, and Kepler layouts. The corpus-derived text and coordinates exist only in memory during tests and are not stored in fixtures or logs.
+
+### Pre-commit review
+
+The release-gate review ran the actual locator-based CLI twice for five different broker/layout families. Page sequences, page-bound rectangles, block counts, and repeated IDs passed for all pages. Block order was compared with PyMuPDF's `sort=True` sequence and manually spot-checked for sensible header/body progression. This is deterministic geometric reading order, not semantic table reconstruction, and no broker-specific coordinates or parsing branches were introduced.
+
+The candidate diff contains only the existing `pypdf` dependency plus PyMuPDF. It contains no service, OCR engine, database, cache implementation, report excerpt, absolute path, or generated evidence file. The PDF corpus is ignored and no PDF is tracked.

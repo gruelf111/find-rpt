@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
+from .evidence import EvidenceError, PdfEvidenceExtractor
 from .retrieval import Candidate, RetrievalEngine, RetrievalResult
 
 
@@ -41,28 +43,85 @@ def render_text(result: RetrievalResult) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="find-rpt",
-        description="Find one local report using filename metadata and ticker evidence.",
-    )
-    parser.add_argument("ticker", help="Bloomberg ticker, for example 'BP/ LN'")
-    parser.add_argument("date", help="Corpus date as YYYYMMDD or YYYY-MM-DD")
-    parser.add_argument("broker", help="Broker label; punctuation and case are normalized")
-    parser.add_argument("--corpus", type=Path, default=Path("corpus"))
-    parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser = argparse.ArgumentParser(prog="find-rpt")
+    subparsers = parser.add_subparsers(dest="command")
+
+    find = subparsers.add_parser("find", help="select one report")
+    _add_locator_arguments(find)
+    find.add_argument("--format", choices=("text", "json"), default="text")
+
+    evidence = subparsers.add_parser("evidence", help="extract structured PDF evidence")
+    source = evidence.add_mutually_exclusive_group(required=True)
+    source.add_argument("--pdf-path", type=Path)
+    source.add_argument("--ticker", help="Bloomberg ticker")
+    evidence.add_argument("--date", help="required with --ticker")
+    evidence.add_argument("--broker", help="required with --ticker")
+    evidence.add_argument("--corpus", type=Path, default=Path("corpus"))
+    evidence.add_argument("--pages", help="one-based pages, e.g. 1-3,5")
+    evidence.add_argument("--format", choices=("json",), default="json")
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def _add_locator_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("ticker", help="Bloomberg ticker, for example 'BP/ LN'")
+    parser.add_argument("date", help="corpus date as YYYYMMDD or YYYY-MM-DD")
+    parser.add_argument("broker", help="broker label")
+    parser.add_argument("--corpus", type=Path, default=Path("corpus"))
+
+
+def _run_find(args: argparse.Namespace) -> int:
     try:
         result = RetrievalEngine(args.corpus).retrieve(args.ticker, args.date, args.broker)
     except ValueError as error:
         print(f"Input error: {error}", file=sys.stderr)
         return 1
-
     print(result.to_json() if args.format == "json" else render_text(result))
     return {"found": 0, "not_found": 2, "ambiguous": 3}[result.status]
+
+
+def _run_evidence(args: argparse.Namespace) -> int:
+    retrieval: RetrievalResult | None = None
+    if args.pdf_path is not None:
+        path = args.pdf_path
+        source_root = None
+    else:
+        if not args.date or not args.broker:
+            print("Input error: --date and --broker are required with --ticker", file=sys.stderr)
+            return 1
+        try:
+            retrieval = RetrievalEngine(args.corpus).retrieve(args.ticker, args.date, args.broker)
+        except ValueError as error:
+            print(f"Input error: {error}", file=sys.stderr)
+            return 1
+        if retrieval.status != "found":
+            print(retrieval.to_json())
+            return {"not_found": 2, "ambiguous": 3}[retrieval.status]
+        path = args.corpus / retrieval.match.filename
+        source_root = args.corpus
+    try:
+        document = PdfEvidenceExtractor().extract(path, pages=args.pages, source_root=source_root)
+    except EvidenceError as error:
+        print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
+        return 1
+    payload = document.to_dict()
+    if retrieval is not None:
+        payload = {"retrieval": retrieval.to_dict(), "evidence": payload}
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # Preserve the original positional retrieval interface while documenting `find`.
+    if argv and argv[0] not in {"find", "evidence", "-h", "--help"}:
+        argv.insert(0, "find")
+    args = build_parser().parse_args(argv)
+    if args.command == "find":
+        return _run_find(args)
+    if args.command == "evidence":
+        return _run_evidence(args)
+    build_parser().print_help()
+    return 1
 
 
 if __name__ == "__main__":
