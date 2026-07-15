@@ -1,10 +1,10 @@
-# Retrieval milestone evaluation
+# Retrieval, evidence, and revision-candidate evaluation
 
 Evaluation date: 2026-07-16
 
 ## Scope
 
-This evaluation covers deterministic report retrieval and the PDF evidence layer. Summarization, estimate extraction, claim selection/highlighting, charts, and email drafting remain out of scope.
+This evaluation covers deterministic report retrieval, the PDF evidence layer, and deterministic estimate-revision candidate extraction. Final brief generation, rationale interpretation, claim selection/highlighting, charts, and email drafting remain out of scope. No LLM or external service is used.
 
 The evaluation dataset contains query metadata and expected local filenames only. This document contains no report text, extracted passages, analyst contact data, report screenshots, or PDF-derived artifacts.
 
@@ -20,6 +20,8 @@ Original retrieval milestone result: **21 tests passed; 0 failed; 0 skipped.**
 
 Pre-commit evidence-layer review result: **28 tests passed; 0 failed; 0 skipped.**
 
+Revision-candidate pre-commit review result: **41 tests passed; 0 failed; 0 skipped.**
+
 Coverage includes:
 
 - filename date and normalized broker shortlisting;
@@ -32,6 +34,66 @@ Coverage includes:
 - sanitized errors and evidence output that excludes report text;
 - case-insensitive PDF extensions and filename hashes; and
 - portable relative result paths.
+
+Revision coverage additionally includes:
+
+- positive, negative, and zero-denominator arithmetic;
+- percentage changes, percentage points, and basis points;
+- currency, millions/billions, per-share, and rate units;
+- fiscal, calendar, quarterly, half-year, and unspecified period labels;
+- adjusted, diluted, reported, ordinary, basic, stated, restated, and other common qualifiers, including abbreviated forms;
+- prose old/new statements, aligned tables, grouped multi-year tables, and percentage-only matrices;
+- explicit numeric consensus spreads, exact same-page consensus-table enrichment, and directional consensus with no fabricated value;
+- disclosure-only pages excluded from revision candidate scoring;
+- unit mismatch, rounded-value mismatch, conflicting-source, `NA`, `n.m.`, and `ns` behavior;
+- stable page/block evidence resolution and repeatable JSON; and
+- direct-path plus locator-backed `revisions` CLI integration.
+
+## Estimate-revision corpus evaluation
+
+Eleven real reports across eleven brokers were run twice through the evidence and revision layers. The checked-in evaluation file contains only safe broker/filename/status/count metadata. Report text, values, coordinates, and screenshots are not persisted.
+
+| Measure | Result |
+| --- | ---: |
+| Reports tested | 11 |
+| Reports with emitted revisions | 6 |
+| Reports with explicit no-revision result | 2 |
+| Reports with unresolved revision candidates | 3 |
+| Emitted revision rows | 178 |
+| Manually checked revision rows | 32 |
+| Correct manual row extractions | 32 / 32 |
+| Referenced source blocks resolved automatically | 493 / 493 |
+| Comparable stated-versus-calculated changes | 98 |
+| Arithmetic reconciliations within tolerance | 79 / 98 (80.6%) |
+| Rows warned for rounding/reconciliation mismatch | 19 |
+| False-positive rows in the manual sample | 0 |
+| Known missed explicit revision rows | 45 |
+| Conflicting source candidates retained and warned | 2 |
+| Rows enriched from an exact consensus table match | 3 |
+
+All 178 emitted rows were validated automatically for deterministic repeatability, arithmetic recomputation, and evidence resolution. A representative 32-row sample was then compared manually with the source PDFs across all six revision-bearing reports: 8 rows from the aligned previous/current and percentage-matrix layout, 6 from a compact side-by-side table, 9 from the grouped multi-year table, 6 compact inline prose changes, and 3 target-price prose rows. The checks covered metric names and qualifiers, fiscal-period alignment, currency/scale/per-share/rate units, same-row or explicitly linked old/new provenance, stated and calculated changes, percentage points, consensus, warnings, and intentional nulls. All 32 sampled rows were correct and no sampled row was a false positive.
+
+Representative pages from the five reports without emitted revisions were also inspected. Two contain no estimate revision and now return `no_revisions`; one of those had previously been an unresolved result caused solely by disclosure boilerplate. Three contain revision-like, guidance, actual-versus-consensus, or comparison language but no safely linked old/new broker estimate row; they remain `candidates_unresolved` and emit no fabricated values.
+
+| Broker/layout | CLI result | Emitted rows | Manually checked rows | Representative coverage |
+| --- | --- | ---: | ---: | --- |
+| ABG Sundal Collier | `candidates_unresolved` | 0 | 0 | event narrative; no safely linked revision row |
+| BofA Global Research | `revisions_found` | 46 | 8 | old/new table, percentage matrix, consensus |
+| J.P. Morgan | `candidates_unresolved` | 0 | 0 | actual/guidance/consensus comparisons only |
+| Nordea Equity Research | `revisions_found` | 18 | 6 | compact table and accounting qualifiers |
+| Degroof Petercam | `revisions_found` | 1 | 1 | prose target-price change |
+| Deutsche Bank Research | `candidates_unresolved` | 0 | 0 | comparison language without linked old/new estimates |
+| Intermonte Securities | `revisions_found` | 104 | 9 | grouped table, negatives, percentage points |
+| Jefferies | `no_revisions` | 0 | 0 | disclosure-only false candidate removed |
+| KBC Securities | `no_revisions` | 0 | 0 | no revision passage |
+| Stifel Nicolaus | `revisions_found` | 2 | 2 | conflicting prose candidates retained |
+| Kepler Cheuvreux | `revisions_found` | 7 | 6 | compact inline percentage and old/new prose |
+
+The 19 arithmetic mismatches are retained warnings, not extraction failures. They occur where displayed old/new values are too coarsely rounded to reproduce the source-stated percentage within the 0.25 percentage-point tolerance. Zero denominators and mismatched units do not enter the reconciliation denominator.
+
+The 45 known misses are conservative omissions counted manually in two dense tables: 15 nested segment subrows whose metric would have to be inherited from a parent row, and 30 wrapped or abbreviated rows that are not safely normalized. Additional misses may exist in the three unresolved layouts and are not assigned a fabricated count. This evaluation therefore demonstrates high precision on the sampled emitted rows, not complete corpus recall.
+
+The real set includes explicit old/new values, prose-only revisions, percentage-only matrices, exact same-page consensus comparisons, 24 emitted rows containing negative old or new values, 33 emitted rows with stated or calculated percentage-point treatment, two no-revision reports, and ambiguous or poorly reconstructed layouts. Three consensus rows were joined only because page, metric, qualifiers, period, and unit matched uniquely; the consensus block is included as separate evidence. Synthetic tests prove that qualifier or period mismatches remain null.
 
 ## Manually verified corpus cases
 
@@ -73,6 +135,12 @@ Result: **11/11 expected PDFs selected.**
 - Reading order is PyMuPDF's deterministic sorted block order, not semantic table reconstruction.
 - Text boxes extending beyond the page boundary are clipped; degenerate boxes are omitted.
 - Stable IDs intentionally change if the PDF bytes or supported parser behavior changes.
+- Nested table rows that require parent-label inheritance are unsupported.
+- Wrapped metric labels and some broker abbreviations remain unresolved.
+- Separate consensus tables are joined only on the same page when normalized metric, qualifiers, period, and unit match exactly and uniquely; cross-page, fuzzy, ambiguous, or definition-mismatched tables remain unsupported.
+- Percentage-only matrices keep old/new values null and never back-solve an old value.
+- Candidate detection can return `candidates_unresolved` for reports with revision-like language but no safely parsed row.
+- The 0.25 percentage-point reconciliation tolerance intentionally surfaces discrepancies caused by coarse display rounding.
 
 ## Evidence-layer corpus validation
 

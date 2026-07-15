@@ -1,0 +1,13 @@
+[
+  {"broker": "ABG Sundal Collier", "filename": "20260511_ABG Sundal Collier_0566b42f1d8750853347bf485216f764.pdf", "expected_status": "candidates_unresolved", "expected_revision_count": 0},
+  {"broker": "BofA Global Research", "filename": "20260511_BofA Global Research_003c2de68007dc1805c646be0e369535.pdf", "expected_status": "revisions_found", "expected_revision_count": 46},
+  {"broker": "J.P. Morgan", "filename": "20260511_JP Morgan_1666c9de5c0a393daa6484be9f484839.pdf", "expected_status": "candidates_unresolved", "expected_revision_count": 0},
+  {"broker": "Nordea Equity Research", "filename": "20260511_Nordea Equity Research_09830ec754626864bb0aa1f8c9f2f71f.pdf", "expected_status": "revisions_found", "expected_revision_count": 18},
+  {"broker": "Degroof Petercam", "filename": "20260511_Degroof Petercam_011c59f3f95983c8565a1bd16be40fde.pdf", "expected_status": "revisions_found", "expected_revision_count": 1},
+  {"broker": "Deutsche Bank Research", "filename": "20260511_Deutsche Bank Research_040af2ec1e0af3c2673f9579d7dd8203.pdf", "expected_status": "candidates_unresolved", "expected_revision_count": 0},
+  {"broker": "Intermonte Securities", "filename": "20260511_Intermonte Securities_89370c90d3676fad2c1ae665e4dcf57f.pdf", "expected_status": "revisions_found", "expected_revision_count": 104},
+  {"broker": "Jefferies", "filename": "20260511_Jefferies_0c66e347fc5b6d6b413d523f33f0f7c2.pdf", "expected_status": "no_revisions", "expected_revision_count": 0},
+  {"broker": "KBC Securities", "filename": "20260511_KBC Securities_983612ba9e74731e074484836c14e498.pdf", "expected_status": "no_revisions", "expected_revision_count": 0},
+  {"broker": "Stifel Nicolaus", "filename": "20260511_Stifel Nicolaus_167783c6253b21dd0f9765cc96b64254.pdf", "expected_status": "revisions_found", "expected_revision_count": 2},
+  {"broker": "Kepler Cheuvreux", "filename": "20260622_Kepler Cheuvreux_098dda895ab76d9a8e9b4c3a3408485a.pdf", "expected_status": "revisions_found", "expected_revision_count": 7}
+]

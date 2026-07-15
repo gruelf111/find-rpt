@@ -79,3 +79,43 @@ Tests cover a two-page synthetic PDF, stable JSON and IDs, word coordinates, pag
 The release-gate review ran the actual locator-based CLI twice for five different broker/layout families. Page sequences, page-bound rectangles, block counts, and repeated IDs passed for all pages. Block order was compared with PyMuPDF's `sort=True` sequence and manually spot-checked for sensible header/body progression. This is deterministic geometric reading order, not semantic table reconstruction, and no broker-specific coordinates or parsing branches were introduced.
 
 The candidate diff contains only the existing `pypdf` dependency plus PyMuPDF. It contains no service, OCR engine, database, cache implementation, report excerpt, absolute path, or generated evidence file. The PDF corpus is ignored and no PDF is tracked.
+
+## 2026-07-16 - Deterministic estimate-revision candidates
+
+### Three-state result and schema
+
+Revision extraction runs only on the one `EvidenceDocument` produced from a uniquely selected report, or on the one PDF explicitly supplied with `--pdf-path`. Its result is `revisions_found`, `no_revisions`, or `candidates_unresolved`; the third state prevents revision-like language or a poorly reconstructed table from being silently treated as either a valid row or a clean no-revision report.
+
+The row schema extends the suggested fields with `period_basis`, `stated_change_pp`, `calculated_change_pp`, and `extraction_method`. `period_basis` preserves fiscal, calendar, and unspecified year labels. Percentage-point changes are separate from relative percentage revisions, so a margin move is not misrepresented. `extraction_method` distinguishes prose, aligned old/new tables, grouped multi-year old/new/change tables, percentage-only matrices, compact headers, and inline stated changes. Evidence contains only one-based page numbers and stable block IDs; source passages are not copied into revision JSON.
+
+Units remain compact canonical strings such as `EUR`, `EURm`, `EURbn`, `EUR/share`, `%`, `percentage_points`, and `basis_points`. Currency, scale, per-share basis, and rate basis are therefore not collapsed. The `Eu`/`Eu mn` abbreviation is normalized as an explicit euro/euro-millions label; no broker-dependent parsing branch is currently enabled. Broker-specific behavior, if later required, must enter through the isolated `RevisionExtractor.extract(..., broker=...)` boundary rather than being scattered through generic parsers.
+
+### Conservative deterministic parsers
+
+Candidate blocks require an explicit combination of metric, revision, period/value, old/new, consensus, or estimate-change signals. Parsing then supports:
+
+- prose `from old to new`, `to new from old`, and explicit `new versus old before` statements;
+- aligned old/new/current/previous tables with optional consensus and change columns;
+- grouped multi-year new/old/change tables reconstructed from word geometry;
+- percentage-only estimate-change matrices; and
+- compact `Change in <metric>` headers.
+
+All table joins stay on one page and require explicit aligned headers, periods, metric labels, and value columns. A separate consensus table may enrich an extracted revision only when page, normalized metric, qualifier set, period, and normalized unit match exactly and identify one observation; its block is retained as additional evidence. Cross-page, fuzzy, ambiguous, qualifier-mismatched, and unit-mismatched joins are prohibited. The extractor does not carry a parent metric into an unlabeled subrow or infer an old value from a stated percentage. Directional consensus language without a number leaves `consensus_value` null. Duplicate source statements with conflicting values are retained and warned rather than arbitrarily resolved.
+
+Alternative considered: use a model to classify tables or complete missing rows. Rejected for this milestone because the deterministic implementation produces useful partial output, exposes its unresolved layouts, and satisfies the no-fabrication constraint. No LLM or external service was added.
+
+### Arithmetic policy
+
+Relative revision is `(new - old) / abs(old) * 100`. The absolute denominator makes movement from a loss to a smaller or larger loss directionally interpretable. A zero old value has no relative percentage and emits `zero_old_value_no_relative_revision`. Consensus spreads use the same absolute-denominator convention and remain null for zero consensus.
+
+For percentage-valued metrics the extractor also calculates `new - old` in percentage points; basis-point values are converted to percentage points for that field. Source-stated and calculated changes reconcile within an absolute tolerance of 0.25 percentage points. Display rounding can exceed that tolerance, in which case the row is retained with a mismatch warning. Arithmetic is suppressed on currency, scale, or basis mismatches.
+
+### Evaluation data and privacy
+
+The real-report regression file stores only broker, filename, expected status, and expected row count. It contains no report passage, financial value, coordinate, screenshot, analyst data, or content hash. All source text and coordinates stay in memory during tests. Visual inspection images were written only to the operating-system temporary directory and are not repository artifacts.
+
+### Pre-commit review findings
+
+The 11-report CLI review found three material issues and fixed them without adding a dependency or broker-specific branch: abbreviated accounting qualifiers were not consistently preserved, a safe same-page consensus table was left unlinked, and disclosure-only pages could be classified as unresolved candidates. Qualifier normalization now covers common abbreviated forms, consensus joining follows the exact policy above, and generic legal/research-disclosure phrases are excluded before candidate scoring.
+
+The review distinguishes automated validation from manual field verification. All 178 emitted rows are repeatable and all 493 referenced block IDs resolve to their source pages; a representative 32-row sample across all six revision-bearing reports was manually checked for metric/qualifier, period, unit, row linkage, arithmetic representation, null handling, and source passage. Dense nested and wrapped table rows remain conservative omissions rather than inferred output.

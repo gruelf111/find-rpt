@@ -5,8 +5,9 @@ import json
 import sys
 from pathlib import Path
 
-from .evidence import EvidenceError, PdfEvidenceExtractor
+from .evidence import EvidenceDocument, EvidenceError, PdfEvidenceExtractor
 from .retrieval import Candidate, RetrievalEngine, RetrievalResult
+from .revisions import RevisionExtractor
 
 
 def _candidate_lines(candidate: Candidate) -> list[str]:
@@ -59,6 +60,18 @@ def build_parser() -> argparse.ArgumentParser:
     evidence.add_argument("--corpus", type=Path, default=Path("corpus"))
     evidence.add_argument("--pages", help="one-based pages, e.g. 1-3,5")
     evidence.add_argument("--format", choices=("json",), default="json")
+
+    revisions = subparsers.add_parser(
+        "revisions", help="extract deterministic estimate-revision candidates"
+    )
+    source = revisions.add_mutually_exclusive_group(required=True)
+    source.add_argument("--pdf-path", type=Path)
+    source.add_argument("--ticker", help="Bloomberg ticker")
+    revisions.add_argument("--date", help="required with --ticker")
+    revisions.add_argument("--broker", help="required with --ticker")
+    revisions.add_argument("--corpus", type=Path, default=Path("corpus"))
+    revisions.add_argument("--pages", help="one-based pages, e.g. 1-3,5")
+    revisions.add_argument("--format", choices=("json",), default="json")
     return parser
 
 
@@ -110,16 +123,59 @@ def _run_evidence(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_document(
+    args: argparse.Namespace,
+) -> tuple[RetrievalResult | None, EvidenceDocument | None, int]:
+    retrieval: RetrievalResult | None = None
+    if args.pdf_path is not None:
+        path = args.pdf_path
+        source_root = None
+    else:
+        if not args.date or not args.broker:
+            print("Input error: --date and --broker are required with --ticker", file=sys.stderr)
+            return None, None, 1
+        try:
+            retrieval = RetrievalEngine(args.corpus).retrieve(args.ticker, args.date, args.broker)
+        except ValueError as error:
+            print(f"Input error: {error}", file=sys.stderr)
+            return None, None, 1
+        if retrieval.status != "found":
+            print(retrieval.to_json())
+            return retrieval, None, {"not_found": 2, "ambiguous": 3}[retrieval.status]
+        path = args.corpus / retrieval.match.filename
+        source_root = args.corpus
+    try:
+        document = PdfEvidenceExtractor().extract(path, pages=args.pages, source_root=source_root)
+    except EvidenceError as error:
+        print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
+        return retrieval, None, 1
+    return retrieval, document, 0
+
+
+def _run_revisions(args: argparse.Namespace) -> int:
+    retrieval, document, code = _resolve_document(args)
+    if code:
+        return code
+    result = RevisionExtractor().extract(document, broker=args.broker)
+    payload = result.to_dict()
+    if retrieval is not None:
+        payload = {"retrieval": retrieval.to_dict(), "revisions": payload}
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     # Preserve the original positional retrieval interface while documenting `find`.
-    if argv and argv[0] not in {"find", "evidence", "-h", "--help"}:
+    if argv and argv[0] not in {"find", "evidence", "revisions", "-h", "--help"}:
         argv.insert(0, "find")
     args = build_parser().parse_args(argv)
     if args.command == "find":
         return _run_find(args)
     if args.command == "evidence":
         return _run_evidence(args)
+    if args.command == "revisions":
+        return _run_revisions(args)
     build_parser().print_help()
     return 1
 
