@@ -1,0 +1,68 @@
+[
+  {
+    "ticker": "ERICB SS",
+    "date": "20260511",
+    "broker": "ABG Sundal Collier",
+    "expected_filename": "20260511_ABG Sundal Collier_0566b42f1d8750853347bf485216f764.pdf"
+  },
+  {
+    "ticker": "HNR1 GY",
+    "date": "2026-05-11",
+    "broker": "BofA Global Research",
+    "expected_filename": "20260511_BofA Global Research_003c2de68007dc1805c646be0e369535.pdf"
+  },
+  {
+    "ticker": "CPG LN",
+    "date": "20260511",
+    "broker": "J.P. Morgan",
+    "expected_filename": "20260511_JP Morgan_1666c9de5c0a393daa6484be9f484839.pdf"
+  },
+  {
+    "ticker": "SYNSAM SS",
+    "date": "20260511",
+    "broker": "Nordea Equity Research",
+    "expected_filename": "20260511_Nordea Equity Research_09830ec754626864bb0aa1f8c9f2f71f.pdf"
+  },
+  {
+    "ticker": "ARGX BB",
+    "date": "20260511",
+    "broker": "Degroof Petercam",
+    "expected_filename": "20260511_Degroof Petercam_011c59f3f95983c8565a1bd16be40fde.pdf"
+  },
+  {
+    "ticker": "AZN LN",
+    "date": "20260511",
+    "broker": "Deutsche Bank Research",
+    "expected_filename": "20260511_Deutsche Bank Research_040af2ec1e0af3c2673f9579d7dd8203.pdf"
+  },
+  {
+    "ticker": "ISP IM",
+    "date": "20260511",
+    "broker": "Intermonte Securities",
+    "expected_filename": "20260511_Intermonte Securities_89370c90d3676fad2c1ae665e4dcf57f.pdf"
+  },
+  {
+    "ticker": "BAVA DC",
+    "date": "20260511",
+    "broker": "Jefferies",
+    "expected_filename": "20260511_Jefferies_0c66e347fc5b6d6b413d523f33f0f7c2.pdf"
+  },
+  {
+    "ticker": "ARGX BB",
+    "date": "20260511",
+    "broker": "KBC Securities",
+    "expected_filename": "20260511_KBC Securities_983612ba9e74731e074484836c14e498.pdf"
+  },
+  {
+    "ticker": "BNOR NO",
+    "date": "20260511",
+    "broker": "Stifel Nicolaus",
+    "expected_filename": "20260511_Stifel Nicolaus_167783c6253b21dd0f9765cc96b64254.pdf"
+  },
+  {
+    "ticker": "SHA0 GY",
+    "date": "20260622",
+    "broker": "Kepler Cheuvreux",
+    "expected_filename": "20260622_Kepler Cheuvreux_098dda895ab76d9a8e9b4c3a3408485a.pdf"
+  }
+]
