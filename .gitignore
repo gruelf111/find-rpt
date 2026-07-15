@@ -1,0 +1,45 @@
+# Source documents that must remain local
+/briefing.pdf
+/corpus/*.pdf
+/corpus/**/*.pdf
+
+# Local caches
+__pycache__/
+*.py[cod]
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Generated citation outputs
+/citations/
+/generated/citations/
+*.citations.json
+*.citations.csv
+*.citations.md
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+secrets.*
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100/
+.Trashes/
+
