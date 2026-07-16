@@ -72,6 +72,17 @@ from .brief import (
     render_markdown,
     render_text as render_brief_text,
 )
+from .escalation import (
+    AmbiguityEscalationBuilder,
+    DraftAnalyst,
+    EmailDraft,
+    EscalationPolicy,
+    EscalationResult,
+    MaterialityAssessment,
+    assess_materiality,
+    render_email_draft_markdown,
+    render_email_draft_text,
+)
 
 __all__ = [
     "EncryptedPdfError", "EvidenceBlock", "EvidenceDocument", "EvidenceError",
@@ -94,4 +105,7 @@ __all__ = [
     "BriefAnalyst", "BriefCitation", "BriefRevisionRow", "EstimateVisualization",
     "ResearchBrief", "ResearchBriefBuilder", "make_estimate_visualization",
     "render_markdown", "render_brief_text",
+    "AmbiguityEscalationBuilder", "DraftAnalyst", "EmailDraft",
+    "EscalationPolicy", "EscalationResult", "MaterialityAssessment",
+    "assess_materiality", "render_email_draft_markdown", "render_email_draft_text",
 ]

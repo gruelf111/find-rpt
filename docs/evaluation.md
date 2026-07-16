@@ -1,10 +1,10 @@
-# Retrieval, evidence, revision, bounded-rationale, citation, and brief evaluation
+# Retrieval, evidence, revision, bounded-rationale, citation, brief, and escalation evaluation
 
 Evaluation date: 2026-07-16
 
 ## Scope
 
-This evaluation covers deterministic report retrieval, the PDF evidence layer, deterministic estimate-revision extraction, bounded rationale-passage retrieval, the rationale model boundary, post-model grounding validation, precise local citation highlighting, and final structured brief rendering. Analyst-email escalation and skill packaging remain out of scope. No external service is used.
+This evaluation covers deterministic report retrieval, the PDF evidence layer, deterministic estimate-revision extraction, bounded rationale-passage retrieval, the rationale model boundary, post-model grounding validation, precise local citation highlighting, final structured brief rendering, and review-only analyst escalation. Skill packaging remains out of scope. No external service is used.
 
 The evaluation dataset contains query metadata and expected local filenames only. This document contains no report text, extracted passages, analyst contact data, report screenshots, or PDF-derived artifacts.
 
@@ -114,7 +114,7 @@ Synthetic output was manually read for section order, compactness, missing-value
 - Retrieval remained 11/11 and the previously validated 178 revision rows were unchanged.
 - Citation construction resolved every rendered row and produced zero failed requests. The renderer does not create page coordinates or repair invalid citations.
 - Every rendered title, analyst, and revision citation used by the BofA, Nordea, and Kepler partial briefs was opened through the live loopback viewer and returned HTTP 200. This exercises link resolution but is not substituted for the unavailable visual/manual review of three complete semantic briefs.
-- The front-matter adapter found a cited title candidate on all eleven first pages and a unique top-of-page publication date on eight; two differed from the corpus/query date and are shown separately. Eight analyst records survived the strict printed-name-plus-explicit-email rule; missing analysts remained warnings rather than inferred contacts.
+- During the brief-renderer milestone, the front-matter adapter found a cited title candidate on all eleven first pages and a unique top-of-page publication date on eight; two differed from the corpus/query date and are shown separately. Eight analyst records survived the then-current strict printed-name-plus-explicit-email rule; the later escalation evaluation supersedes those identity metrics.
 - No model-generated real-report rationale, context classification, management participant, takeaway, or first-read claim was produced. Therefore real rationale grounding, unsupported-claim count, context accuracy, and semantic one-minute readability remain **not measured**, not zero.
 - Synthetic validation retained no unsupported claim from the existing adversarial rationale suite. The renderer adds no factual prose beyond fixed descriptions of structured status/context fields.
 - Three complete real briefs could not be opened end to end because no local rationale model was configured. The citation builder and runtime corpus test did validate all citations used by the partial briefs, but this is not represented as the requested visual/manual review of three complete semantic briefs.
@@ -123,10 +123,10 @@ Known rendering limitations:
 
 - The eight-row concise view is a deterministic materiality policy, not issuer-specific judgement; omitted count is explicit.
 - Front-matter title selection is geometric/lexical and conservative but has not had an independent eleven-report semantic title audit.
-- Analyst extraction requires name and email in the same evidence block, so split sidebars are intentionally missed.
+- Analyst extraction remains conservative on compressed or irregular split contact blocks; the escalation evaluation records one missed second contact and zero incorrect pairings.
 - JSON represents the concise view and omission count; it does not dump every extracted revision row.
 - Unicode block bars require a terminal font with block glyphs; values remain the plain-text fallback on each line.
-- Real semantic/manual release gates require a configured loopback model and local human review. No email escalation or skill packaging is present.
+- Real semantic/manual release gates require a configured loopback model and local human review. Skill packaging is not present.
 
 ## Precise citation evaluation
 
@@ -361,3 +361,66 @@ The actual `find-rpt evidence` locator path was run twice for each case below. O
 Manual review confirmed that public page numbers follow the PDF's one-based sequence and block order follows a sensible header/body progression across the sampled layouts. Dense multi-column tables remain a known semantic-order limitation.
 
 Source integrity review found no tracked PDF, no PDF modification produced by the commands, and no source write path in the implementation. The candidate diff contains no extracted proprietary passage, cached corpus text, absolute workstation path, or large generated artifact.
+
+## Ambiguity-escalation evaluation
+
+### Synthetic trigger and safety coverage
+
+The escalation suite uses only non-proprietary synthetic data. It covers clear, partial, and unclear rationale; no revisions; one and several revisions; rating and target-price changes; percentage-point margins; negative estimates; zero denominators; non-numeric and explicitly marked material revisions; names and addresses present or missing; multiple analysts; neutral greetings; duplicate and answered questions; consensus comparisons; report context and management interaction; deterministic ordering; Markdown, JSON, and text; final-brief stopping behavior; the user signoff placeholder; and a source/dependency guard for prohibited delivery mechanisms.
+
+The materiality tests separately assert the 3% relative threshold, 1 percentage-point threshold, absolute-denominator negative-base policy, zero-denominator refusal, and explicit-materiality requirement for non-numeric rows. The static guard searches `src/` and `pyproject.toml` for mail libraries, named providers, client links, delivery entry points, credential variables, and shell mail invocation.
+
+### Six-report local manual sample
+
+Six real reports were inspected locally across BofA Global Research, Nordea Equity Research, Degroof Petercam, Intermonte Securities, Stifel Nicolaus, and Kepler Cheuvreux. Only broker/layout labels and aggregate outcomes are recorded. Page renders were created under the operating-system temporary directory, inspected, and removed. No report passage, analyst name, analyst address, phone number, real draft, screenshot, coordinate, or absolute path was saved.
+
+No loopback rationale model was configured. Rationale clarity and explained metric/period pairs for this evaluation were therefore assigned by manual local review and passed into an in-memory evaluation harness; they are not represented as automated real-model accuracy. Five reports had clear rationale for their material revisions. One report was assessed as partial: validated rationale covered the material EBIT and target-price changes, while two material EPS periods remained unexplained. The optional partial policy produced questions only for those two EPS periods.
+
+| Measure | Result |
+| --- | ---: |
+| Real reports reviewed | 6 |
+| Clear / partial / unclear manual labels | 5 / 1 / 0 |
+| Expected escalations | 1 |
+| Actual escalations | 1 |
+| Trigger precision on manual sample | 1 / 1 (100%) |
+| Trigger recall on manual sample | 1 / 1 (100%) |
+| False escalations | 0 |
+| Missed escalations | 0 |
+| Relevant named analysts visible / extracted | 10 / 9 |
+| Extracted analyst-name records manually correct | 9 / 9 |
+| Explicit analyst addresses visible / correctly paired | 9 / 8 |
+| Incorrect address pairings | 0 |
+| Explicit no-address analyst cases handled | 1 / 1 with `[TODO: address]` |
+| Multiple-analyst layouts fully resolved | 2 / 3 |
+| Generated real-sample drafts | 1, in memory only |
+| Specific unresolved questions | 2 / 2 |
+| Already-answered material questions included | 0 |
+| Unsupported factual assertions found | 0 |
+| Professional/neutral tone checks | Pass |
+| Prohibited delivery mechanisms found | 0 |
+| Delivery attempts or external calls | 0 |
+
+The one analyst-name/address miss was the second relevant contact in a compact Intermonte page-one contact block. The parser retained the other contact and made no incorrect association. BofA's three-contact block, Nordea's single contact, Degroof's designation/contact block, Stifel's two pipe-delimited contacts, and Kepler's named analyst with designation/role/phone but no address were resolved correctly. This is intentionally recorded as a conservative miss rather than repaired with name/address inference or a broker-specific rule.
+
+The one real-sample draft was inspected through redacted structural checks only: two distinct EPS period questions, no EBIT or target-price question already answered by the manually validated rationale, exact unresolved-recipient placeholder, neutral language, the user signoff placeholder, and the final not-sent statement. The draft existed only in memory and was not written to the repository, cache, logs, or documentation.
+
+### Remaining escalation limitations
+
+- Real automated trigger accuracy remains gated on a configured loopback rationale model and manual review of its validated outputs; the six-report labels above are manual.
+- Materiality thresholds are deterministic starting policies, not issuer-specific judgement. Zero-base and non-numeric changes remain conservative unless an explicit materiality indicator or special rating/target-price rule applies.
+- Driver-to-revision coverage requires an exact validated metric and fiscal-period match. A valid driver expressed only at a broader group level can leave a revision conservatively unresolved.
+- The analyst adapter deliberately misses some compressed or irregular multi-contact layouts. It does not infer an address from a name, a name from an address, or lead status from ordering.
+- Question templates are deterministic. They do not use a model for stylistic polishing, and conflicting rows merged by metric/qualifiers/period omit the conflicting observations.
+- The implementation surfaces drafts only. No delivery, client-launch, provider, credential, or clipboard path exists.
+
+Final escalation-milestone verification passed all 126 repository tests, Python compilation, and dependency consistency checks. No lint or static type-check command is configured. The prohibited-mechanism scan found no runtime or dependency matches, Git tracks no PDFs, and the 174-source-PDF manifest remained unchanged.
+
+### Final adversarial-review rerun
+
+Automated tests and manual structural inspection were kept separate. The 18 requested synthetic functional scenarios were rechecked against deterministic builders and renderers: 14 expected escalation cases and four expected non-escalation cases. All classifications matched, giving 14 true positives, four true negatives, zero false escalations, zero missed escalations, 100% precision, and 100% recall for this constructed matrix. All expected metric/period questions were specific; duplicate questions remaining, already-answered questions remaining, invented facts, and drafts with `sent: true` were each zero. Synthetic analyst/name/address states matched their explicit fixtures, including exact `[TODO: address]`, neutral no-name greeting, and `[Your name]` signoff.
+
+The six-report local sample was then rerun in memory using the previously manually assigned five-clear/one-partial labels and validated explained metric/period pairs. It again produced one true-positive escalation, five true-negative non-escalations, zero false escalations, and zero misses. Both unresolved EPS-period questions were specific, with zero duplicates and zero already-answered EBIT or target-price questions. The draft retained `[TODO: address]`, `[Your name]`, and both machine-readable and rendered not-sent status. No real draft or contact detail was printed or persisted.
+
+Analyst identity metrics distinguish precision from coverage: all nine extracted real-sample name records were correct (9/9 extracted precision), while one of ten visible relevant names was conservatively missed (9/10 coverage). All eight extracted explicit addresses were paired correctly (8/8 extracted precision), while one of nine visible addresses was missed with the same compact second contact (8/9 coverage). No address was inferred and no incorrect pairing occurred.
+
+The final repository suite completed successfully with 126 tests discovered, zero reported failures, and zero reported errors. Python compilation and `pip check` passed. No lint or type-check tool is configured. The expanded runtime/dependency scan found zero prohibited delivery mechanisms. The same 174-file source manifest was `8b756f7037379d26009561c16f11558d8144fddcf6025735be59a081c50109cc` before and after the adversarial run; Git tracks no PDF.

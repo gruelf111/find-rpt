@@ -20,6 +20,12 @@ from .citations import (
     requests_from_metadata,
 )
 from .brief import ResearchBriefBuilder, render_markdown, render_text as render_brief_text
+from .escalation import (
+    AmbiguityEscalationBuilder,
+    EscalationPolicy,
+    render_email_draft_markdown,
+    render_email_draft_text,
+)
 from .metadata import ReportMetadataExtractor
 from .retrieval import Candidate, RetrievalEngine, RetrievalResult
 from .revisions import RevisionExtractor
@@ -114,6 +120,26 @@ def build_parser() -> argparse.ArgumentParser:
     brief.add_argument("--format", choices=("markdown", "json", "text"), default="markdown")
     brief.add_argument("--no-visualization", action="store_true")
     brief.add_argument("--no-model", action="store_true", help="render a transparent partial brief without semantic interpretation")
+    brief.add_argument(
+        "--escalate-partial",
+        action="store_true",
+        help="also draft when partial rationale leaves a material revision unexplained",
+    )
+
+    escalation = subparsers.add_parser(
+        "escalation", help="evaluate ambiguity and render a review-only analyst draft"
+    )
+    escalation.add_argument("--ticker", required=True, help="Bloomberg ticker")
+    escalation.add_argument("--date", required=True, help="corpus date as YYYYMMDD or YYYY-MM-DD")
+    escalation.add_argument("--broker", required=True, help="broker label")
+    escalation.add_argument("--corpus", type=Path, default=Path("corpus"))
+    escalation.add_argument("--format", choices=("markdown", "json", "text"), default="markdown")
+    escalation.add_argument("--no-model", action="store_true", help="evaluate without semantic interpretation")
+    escalation.add_argument(
+        "--escalate-partial",
+        action="store_true",
+        help="draft when partial rationale leaves a material revision unexplained",
+    )
 
     citations = subparsers.add_parser(
         "citations", help="build, validate, and serve precise local citations"
@@ -297,6 +323,15 @@ def _run_brief(args: argparse.Namespace) -> int:
     if rationale.status == "model_error":
         print(rationale.to_json(), file=sys.stderr)
         return 1
+    escalation = AmbiguityEscalationBuilder(
+        EscalationPolicy(escalate_partial=args.escalate_partial)
+    ).build(
+        ticker=retrieval.query.ticker,
+        report_date=retrieval.query.date,
+        metadata=metadata,
+        revisions=revisions,
+        rationale=rationale,
+    )
     requests = list(requests_from_metadata(document.document_id, metadata))
     requests.extend(requests_from_revisions(revisions))
     requests.extend(requests_from_rationale(rationale))
@@ -316,6 +351,7 @@ def _run_brief(args: argparse.Namespace) -> int:
         revisions=revisions,
         rationale=rationale,
         citations=citation_result,
+        escalation=escalation,
         include_visualization=not args.no_visualization,
     )
     if args.format == "json":
@@ -324,6 +360,54 @@ def _run_brief(args: argparse.Namespace) -> int:
         print(render_brief_text(brief), end="")
     else:
         print(render_markdown(brief), end="")
+    return 0
+
+
+def _run_escalation(args: argparse.Namespace) -> int:
+    retrieval, document, code = _resolve_document(args)
+    if code:
+        return code
+    metadata = ReportMetadataExtractor().extract(document)
+    revisions = RevisionExtractor().extract(document, broker=args.broker)
+    try:
+        rationale = RationaleExtractor().extract(
+            document,
+            revisions=revisions,
+            no_model=args.no_model,
+            broker=args.broker,
+        )
+    except ModelConfigurationError as error:
+        print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
+        return 1
+    if rationale.status == "model_error":
+        print(rationale.to_json(), file=sys.stderr)
+        return 1
+    result = AmbiguityEscalationBuilder(
+        EscalationPolicy(escalate_partial=args.escalate_partial)
+    ).build(
+        ticker=retrieval.query.ticker,
+        report_date=retrieval.query.date,
+        metadata=metadata,
+        revisions=revisions,
+        rationale=rationale,
+    )
+    if args.format == "json":
+        print(result.to_json())
+    elif result.requires_analyst_escalation and result.email_draft is not None:
+        reason = result.escalation_reason.replace("_", " ")
+        if args.format == "text":
+            print(f"Analyst escalation required: {reason}\n\n{render_email_draft_text(result.email_draft)}")
+        else:
+            print(
+                "## Analyst escalation required\n\n"
+                f"{reason}.\n\n{render_email_draft_markdown(result.email_draft)}"
+            )
+    else:
+        print("No analyst escalation is required from the validated structured data.")
+        if result.warnings:
+            print("Warnings:")
+            for warning in result.warnings:
+                print(f"- {warning.replace('_', ' ')}")
     return 0
 
 
@@ -421,7 +505,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.reconfigure(encoding="utf-8")
     argv = list(sys.argv[1:] if argv is None else argv)
     # Preserve the original positional retrieval interface while documenting `find`.
-    if argv and argv[0] not in {"find", "evidence", "revisions", "rationale", "brief", "citations", "-h", "--help"}:
+    if argv and argv[0] not in {"find", "evidence", "revisions", "rationale", "brief", "escalation", "citations", "-h", "--help"}:
         argv.insert(0, "find")
     args = build_parser().parse_args(argv)
     if args.command == "find":
@@ -434,6 +518,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_rationale(args)
     if args.command == "brief":
         return _run_brief(args)
+    if args.command == "escalation":
+        return _run_escalation(args)
     if args.command == "citations":
         if args.citation_command == "build":
             return _run_citation_build(args)

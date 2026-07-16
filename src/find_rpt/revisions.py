@@ -147,6 +147,7 @@ class EstimateRevision:
     extraction_method: str
     confidence: str
     warnings: tuple[str, ...]
+    materiality_indicators: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

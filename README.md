@@ -1,8 +1,8 @@
 # find-rpt
 
-This repository implements deterministic retrieval, a PDF evidence layer, conservative estimate-revision extraction, bounded rationale interpretation, precise local citations, and a concise research-brief renderer. Given a Bloomberg ticker, corpus date, and broker, it selects one local PDF, validates estimate revisions, grounds the explanation, builds highlighted loopback citations, and renders Markdown, JSON, or terminal text with an optional compact estimate comparison.
+This repository implements deterministic retrieval, a PDF evidence layer, conservative estimate-revision extraction, bounded rationale interpretation, precise local citations, a concise research-brief renderer, and review-only ambiguity escalation. Given a Bloomberg ticker, corpus date, and broker, it selects one local PDF, validates estimate revisions, grounds the explanation, builds highlighted loopback citations, and renders Markdown, JSON, or terminal text with an optional compact estimate comparison and analyst clarification draft.
 
-It does not draft or send email and is not packaged as the final agent skill yet.
+It can draft a clarification email when validated material revisions remain unexplained. It cannot send, launch, transmit, or copy that draft, and it is not packaged as the final agent skill yet.
 
 ## Setup
 
@@ -75,6 +75,36 @@ find-rpt brief --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux"
 ```
 
 Use `--no-visualization` to suppress comparison bars. Use `--no-model` to exercise the entire local deterministic pipeline and render a transparent partial brief when no local rationale model is configured. A normal brief command without `--no-model` fails clearly if model configuration is missing; it never fills rationale gaps from general knowledge.
+
+Evaluate ambiguity and render only the review-only escalation result:
+
+```powershell
+find-rpt escalation --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format markdown
+find-rpt escalation --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format json
+find-rpt escalation --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format text
+```
+
+The default trigger applies only to `unclear` rationale. Add `--escalate-partial` to `brief` or `escalation` when partial rationale should also trigger if at least one material revision remains unexplained.
+
+### Ambiguity escalation
+
+The trigger is deterministic and uses validated structured data only:
+
+- `RevisionResult` must contain at least one parsed revision;
+- rationale clarity must be `unclear` by default; and
+- at least one material revision must not have a validated driver for the same metric and fiscal period.
+
+The optional partial-rationale policy uses the same unexplained-material-revision test. Clear rationale, no revisions, unavailable rationale clarity, immaterial unexplained changes, and partial rationale without `--escalate-partial` do not trigger.
+
+Materiality is explicit by revision type. Relative changes use an absolute threshold of 3%. A negative old estimate uses the extractor's documented absolute-denominator convention. A zero old value is never compared with the relative threshold. Percentage-point and basis-point-derived moves use a separate 1 percentage-point threshold. Any actual rating or target-price change is material, as is a revision carrying the validated `explicitly_marked_material` indicator. Non-numeric revisions require that explicit indicator; no numeric meaning is inferred.
+
+Questions are generated deterministically from metric, qualifiers, fiscal period, old/new values, relative or percentage-point change, consensus comparison, validated incomplete drivers, report context, and management interaction. Revisions already explained by a validated driver for the same metric and period are omitted. Duplicate rows sharing metric, qualifiers, and period are merged into one question; conflicting observations are not repeated as if they were one value.
+
+Analyst identity comes only from positioned report evidence. The extractor supports first-page bylines/contact blocks, pipe-delimited and multi-line contact layouts, explicit professional designations, roles, addresses, and useful phone numbers. It excludes sales, ESG, disclosure, media, and publishing contacts. An explicitly identified covering or lead analyst is preferred; otherwise all relevant named analysts are addressed. It never derives a name from an address or an address from a broker domain. Missing addresses use exactly `[TODO: address]`; missing names use a neutral greeting and a warning.
+
+The structured draft contains `to`, `analyst_names`, `subject`, `greeting`, `body`, `questions`, `signoff_placeholder`, `unresolved_fields`, `warnings`, `source_report_id`, `escalation_reason`, and an immutable `sent: false` status. Standalone escalation JSON also exposes top-level `sent: false`; JSON brief output exposes `requires_analyst_escalation`, `escalation_reason`, `analyst`, and `email_draft`. Markdown and text put the draft after the brief and end with an explicit statement that it has not been sent. When semantic clarity is unavailable, non-JSON standalone output shows that warning rather than presenting the non-escalation as a fully assessed result.
+
+There is no delivery architecture: no mail library, provider API, credential configuration, `mailto:` action, mail-client launcher, shell mail command, clipboard action, or automatic-send path. Any further action must be taken separately by the user after review and editing outside `find-rpt`.
 
 ### Brief output
 
@@ -217,7 +247,7 @@ The URL and model name have the displayed defaults; the API key has no default. 
 
 The structured result includes rationale clarity; grounded drivers with metrics, periods, categories, evidence block IDs, causal-link type, and confidence; why-now; report context; management contact and named participants; one-line takeaway; jargon definitions; important first-read items; and warnings. Python rejects mismatched report/revision data, unknown block IDs, claims outside the bounded passages, unsupported metrics or fiscal periods, unsupported numbers, extra schema fields, and malformed types. A driver survives only when its cited sentence contains either direct causal language or explicit hedged causal language; proximity alone is removed. Rating or valuation evidence cannot become an earnings driver, and a `valuation only` driver must link to target price. Model/provider failures return an explicit warning and no invented fallback text.
 
-The brief renderer consumes only validated structured metadata, revision, rationale, and citation models. It does not parse PDFs, call a model, calculate authoritative revision values, or create evidence coordinates. A separate conservative front-matter adapter supplies a cited title and only retains analysts whose printed name and email appear together in report evidence; it never derives a name from an address.
+The brief renderer consumes only validated structured metadata, revision, rationale, and citation models. It does not parse PDFs, call a model, calculate authoritative revision values, or create evidence coordinates. A separate conservative metadata adapter supplies a cited title and evidence-backed analyst fields. It can retain an explicitly named research analyst when an address is absent, but it never derives a name from an address or an address from a naming convention.
 
 Confidence is deterministic, not model-calibrated. A driver is `high` only when it has direct causal support plus a supported metric and period; `medium` means direct support is incomplete or the causal link is explicitly hedged/inferred; `low` means only minimal structured linkage remains. Other grounded claims are `high` for strong single-block lexical support, `medium` for sufficient multi-block or partial lexical support, and otherwise removed or `low`.
 

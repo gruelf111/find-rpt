@@ -242,7 +242,7 @@ geometry is empty/non-finite, now fail closed.
 
 ### Validated-model boundary and section order
 
-`ResearchBriefBuilder` consumes `ReportMetadata`, `RevisionResult`, `RationaleResult`, and `CitationBuildResult`. It does not receive report text, parse a PDF, call a model, calculate an authoritative revision, or generate evidence geometry. A separate deterministic page-one metadata adapter supplies only a conservatively selected title and analyst records whose printed name and explicit email occur together. Missing metadata remains a warning.
+`ResearchBriefBuilder` consumes `ReportMetadata`, `RevisionResult`, `RationaleResult`, and `CitationBuildResult`. It does not receive report text, parse a PDF, call a model, calculate an authoritative revision, or generate evidence geometry. A separate deterministic metadata adapter supplies a conservatively selected page-one title and evidence-backed analyst records. The later escalation milestone extended that adapter to retain an explicitly named research analyst without an address while preserving missing fields. Missing metadata remains a warning.
 
 The Markdown/text order is one-glance identity, title/takeaway, what changed, why it changed and why now, estimate picture, first-read items, source/analyst information, and material warnings. Empty optional sections are omitted. This follows analyst reading order while keeping source identity and completeness caveats visible.
 
@@ -260,4 +260,44 @@ The estimate picture is a dependency-free, zero-axis bar chart over discrete old
 
 Citation identity remains evidence-based and excludes claim prose. Because several claims can legitimately share the same citation ID, `CitationBuildResult` now carries claim-to-citation bindings in addition to de-duplicated records. This preserves stable URLs while allowing every rendered claim to resolve inline.
 
-Retrieval ambiguity, unusable evidence, model failure, or a total citation-builder error stops rendering. A failed or invalid individual citation causes the affected fact to be omitted, with a material partial-brief warning. Metadata, revisions, rationale, and citations must share one document identity; metadata may omit its identity only for backwards-compatible synthetic callers. No revisions, unresolved revision candidates, `--no-model`, missing title/analyst, and omitted rows produce a transparent partial brief with material warnings. The brief CLI always extracts the full selected PDF and exposes no page-limited option. This milestone deliberately does not implement the unclear-rationale analyst-email escalation or skill packaging.
+Retrieval ambiguity, unusable evidence, model failure, or a total citation-builder error stops rendering. A failed or invalid individual citation causes the affected fact to be omitted, with a material partial-brief warning. Metadata, revisions, rationale, and citations must share one document identity; metadata may omit its identity only for backwards-compatible synthetic callers. No revisions, unresolved revision candidates, `--no-model`, missing title/analyst, and omitted rows produce a transparent partial brief with material warnings. The brief CLI always extracts the full selected PDF and exposes no page-limited option. Skill packaging remains outside this milestone.
+
+## 2026-07-16 - Ambiguity escalation and review-only analyst drafting
+
+### Deterministic trigger and partial-rationale policy
+
+`AmbiguityEscalationBuilder` consumes only the selected report's `ReportMetadata`, `RevisionResult`, and validated `RationaleResult`. The default trigger requires parsed revisions, `unclear` rationale, and at least one material revision without a validated driver for the same metric and fiscal period. Clear rationale never triggers. Missing semantic interpretation is reported as unavailable rather than treated as unclear.
+
+Partial rationale is opt-in through `EscalationPolicy(escalate_partial=True)` and the CLI's `--escalate-partial` option. Even then, it triggers only when a material revision remains unexplained. This avoids drafting merely because a report uses cautious language while preserving an explicit route for incomplete rationale.
+
+Alternative considered: trigger on every `partial` result. Rejected because it would create false escalations when every material change is already covered and only an immaterial row remains incomplete.
+
+### Materiality rules
+
+Relative revisions are material at an absolute 3% threshold. Negative bases retain the revision extractor's `(new-old)/abs(old)` convention and are labelled separately in the assessment. Zero denominators are never compared with the relative threshold. Percentage and margin observations use the validated percentage-point fields and a separate absolute 1 percentage-point threshold; the relative percentage is not substituted. Rating and target-price changes are material when they actually change. A non-numeric row is material only when validated structured data carries `explicitly_marked_material` or its equivalent report-derived indicator.
+
+Alternative considered: apply 3% to every numeric-looking field. Rejected because percentage-point margins, zero bases, and unitless/non-numeric changes do not support that comparison.
+
+### Lead-analyst selection and unresolved recipients
+
+The metadata adapter now retains explicit named analysts even when an address is absent. It supports multi-line, pipe-delimited, and same-line contact blocks, explicit designations, roles, phones, and geometry-bounded name/address association. Same-column and nearest-line rules prevent cross-column address attachment. Generic research headings, organization abbreviations, sales, ESG, disclosure, media, and publishing contacts are excluded.
+
+An explicitly supported `covering` or `lead` status is preferred. Without that evidence, every relevant named analyst is addressed rather than choosing one by order or broker convention. Names and addresses are never derived from each other. A missing address produces exactly `[TODO: address]`; a missing name produces a neutral greeting and a warning. PDF metadata is not currently used because the evidence document does not expose a validated metadata field and visual report evidence is stronger.
+
+### Question construction and deduplication
+
+Questions are deterministic templates populated from the unresolved revision's metric, qualifiers, period, old/new values, relative or percentage-point change, consensus comparison, incomplete validated drivers, context, and management interaction. Metric-specific assumption menus keep questions concrete without adding facts. A driver suppresses a question only when its validated metric and fiscal period answer that revision. Rows sharing metric, qualifiers, and period are merged; if their observations conflict, the merged question omits the conflicting values rather than repeating or resolving them.
+
+Alternative considered: require a model to write or deduplicate the questions. Rejected because the structured inputs support concise deterministic questions, which are easier to test and cannot introduce new facts. No model-assisted polishing is enabled; the deterministic implementation is the only path.
+
+### No-send architecture and stopping behavior
+
+`EmailDraft` is an immutable data model. Renderers can display it in Markdown, JSON, or text, but no component accepts credentials, talks to a mail provider, launches a client, creates a `mailto:` action, invokes a shell mail command, copies to the clipboard, or exposes a delivery method. The brief renderer places the escalation last and ends with the statement that the draft has not been sent. `find-rpt escalation` exposes the same review-only model without citation or delivery side effects.
+
+A source/dependency guard test rejects named mail libraries, providers, credential variables, client links, and delivery entry points. Any use of the draft requires separate user review and action outside this repository.
+
+### Final adversarial-review hardening
+
+The final review found three material boundary gaps. First, JSON relied on the absence of a send method and the rendered not-sent sentence but did not carry an explicit machine-readable status. `EmailDraft` and `EscalationResult` now expose frozen, non-initializable `sent: false` fields. Second, a generic revision warning string could activate explicit materiality. Only the dedicated validated `materiality_indicators` field can now do so; confidence and warnings cannot override missing evidence. Third, standalone Markdown/text no-model output previously hid `rationale_clarity_unavailable` behind a generic no-escalation sentence. It now surfaces structured warnings.
+
+The analyst evidence audit also made the existing evidence tuple include explicit phone and lead/covering-role evidence used by the extracted fields. A regression assertion resolves each synthetic analyst field back to those evidence blocks. The no-send guard was expanded to cover draft-delivery names, provider endpoints, email credential variables, and clipboard integrations in addition to the original libraries and client actions.

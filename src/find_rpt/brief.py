@@ -9,6 +9,12 @@ from pathlib import PurePath
 from typing import Iterable
 
 from .citations import CitationBuildResult, CitationRecord
+from .escalation import (
+    DraftAnalyst,
+    EmailDraft,
+    EscalationResult,
+    render_email_draft_markdown,
+)
 from .metadata import ReportMetadata
 from .rationale import GroundedClaim, RationaleResult
 from .revisions import EstimateRevision, RevisionResult
@@ -124,6 +130,10 @@ class ResearchBrief:
     analysts: tuple[BriefAnalyst, ...]
     primary_citation: BriefCitation | None
     warnings: tuple[str, ...]
+    requires_analyst_escalation: bool
+    escalation_reason: str | None
+    analyst: tuple[DraftAnalyst, ...]
+    email_draft: EmailDraft | None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -372,6 +382,7 @@ class ResearchBriefBuilder:
         revisions: RevisionResult,
         rationale: RationaleResult | None,
         citations: CitationBuildResult | None,
+        escalation: EscalationResult | None = None,
         include_visualization: bool = True,
     ) -> ResearchBrief:
         if rationale is not None and rationale.document_id != revisions.document_id:
@@ -380,6 +391,8 @@ class ResearchBriefBuilder:
             raise ValueError("citations and revisions belong to different reports")
         if metadata.document_id is not None and metadata.document_id != revisions.document_id:
             raise ValueError("metadata and revisions belong to different reports")
+        if escalation is not None and escalation.source_report_id != revisions.document_id:
+            raise ValueError("escalation and revisions belong to different reports")
         citation_map = _citation_map(citations)
         rows, omitted = _select_revision_rows(revisions, citation_map, self.max_revision_rows)
         paragraphs, clarity, warnings = _rationale_paragraphs(rationale, citation_map)
@@ -452,6 +465,8 @@ class ResearchBriefBuilder:
             warnings.extend(rationale.warnings)
             if extraction is not None:
                 warnings.extend(extraction.warnings)
+        if escalation is not None:
+            warnings.extend(escalation.warnings)
 
         visualizations: list[EstimateVisualization] = []
         if include_visualization:
@@ -521,6 +536,12 @@ class ResearchBriefBuilder:
             analysts=tuple(analysts),
             primary_citation=primary,
             warnings=tuple(dict.fromkeys(warnings)),
+            requires_analyst_escalation=(
+                escalation.requires_analyst_escalation if escalation is not None else False
+            ),
+            escalation_reason=escalation.escalation_reason if escalation is not None else None,
+            analyst=escalation.analyst if escalation is not None else (),
+            email_draft=escalation.email_draft if escalation is not None else None,
         )
 
 
@@ -613,6 +634,15 @@ def render_markdown(brief: ResearchBrief) -> str:
     if brief.warnings:
         lines.extend(("## Warnings / missing information", ""))
         lines.extend(f"- {warning.replace('_', ' ')}" for warning in brief.warnings)
+        lines.append("")
+
+    if brief.requires_analyst_escalation and brief.email_draft is not None:
+        lines.extend(("## Analyst clarification draft", ""))
+        lines.append(
+            "The report contains a material revision whose rationale is unclear. "
+            "You may wish to contact the covering analyst; a review-only draft follows."
+        )
+        lines.extend(("", render_email_draft_markdown(brief.email_draft)))
     return "\n".join(lines).rstrip() + "\n"
 
 

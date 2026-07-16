@@ -53,14 +53,14 @@ This checklist distinguishes mandatory requirements from preferences and optiona
 
 ## Ambiguity escalation and email safety
 
-- [ ] RQ-038 (Required): Detect when revisions are present but the report's rationale is unclear.
-- [ ] RQ-039 (Required): In that case, offer to draft an email to the covering analyst.
-- [ ] RQ-040 (Required): Automatically compose a draft with questions specific to the unclear revision rationale.
-- [ ] RQ-041 (Required): Identify the covering analyst by name from the report.
-- [ ] RQ-042 (Required): Use `[TODO: address]` in the `To:` field when the analyst's email cannot be determined.
-- [ ] RQ-043 (Required): Surface the draft to the user and stop.
-- [ ] RQ-044 (Required): Never send the email without user review and a separate explicit action.
-- [ ] RQ-045 (Required): Do not include any automatic-send path in the skill.
+- [x] RQ-038 (Required): Detect when revisions are present but the report's rationale is unclear.
+- [x] RQ-039 (Required): In that case, offer to draft an email to the covering analyst.
+- [x] RQ-040 (Required): Automatically compose a draft with questions specific to the unclear revision rationale.
+- [x] RQ-041 (Required): Identify the covering analyst by name from the report.
+- [x] RQ-042 (Required): Use `[TODO: address]` in the `To:` field when the analyst's email cannot be determined.
+- [x] RQ-043 (Required): Surface the draft to the user and stop.
+- [x] RQ-044 (Required): Never send the email without user review and a separate explicit action.
+- [x] RQ-045 (Required): Do not include any automatic-send path in the skill.
 
 ## Platform, packaging, and submission
 
