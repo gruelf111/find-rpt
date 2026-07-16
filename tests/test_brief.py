@@ -379,7 +379,7 @@ class BriefCliTests(unittest.TestCase):
 
     def test_markdown_json_text_and_no_visualization_cli(self) -> None:
         self.write_report("a" * 32)
-        for output_format in ("markdown", "json", "text"):
+        for output_format in ("markdown", "json", "text", "agent-json"):
             with self.subTest(output_format=output_format):
                 output, errors = io.StringIO(), io.StringIO()
                 with redirect_stdout(output), redirect_stderr(errors):
@@ -393,6 +393,12 @@ class BriefCliTests(unittest.TestCase):
                 self.assertNotIn(str(self.root), output.getvalue())
                 if output_format == "json":
                     self.assertEqual(json.loads(output.getvalue())["estimate_visualizations"], [])
+                if output_format == "agent-json":
+                    payload = json.loads(output.getvalue())
+                    self.assertEqual(payload["schema_version"], "1.0")
+                    self.assertEqual(payload["normalized_request"]["ticker"], "ABC LN")
+                    self.assertIn("#evidence-target", payload["rendered_markdown"])
+                    self.assertFalse(payload["sent"])
 
     def test_ambiguous_retrieval_stops_before_brief_rendering(self) -> None:
         self.write_report("a" * 32, "Synthetic Company: First report")

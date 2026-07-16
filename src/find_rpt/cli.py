@@ -117,7 +117,11 @@ def build_parser() -> argparse.ArgumentParser:
     brief.add_argument("--corpus", type=Path, default=Path("corpus"))
     brief.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
     brief.add_argument("--base-url", default=f"http://{DEFAULT_HOST}:{DEFAULT_PORT}")
-    brief.add_argument("--format", choices=("markdown", "json", "text"), default="markdown")
+    brief.add_argument(
+        "--format",
+        choices=("markdown", "json", "text", "agent-json"),
+        default="markdown",
+    )
     brief.add_argument("--no-visualization", action="store_true")
     brief.add_argument("--no-model", action="store_true", help="render a transparent partial brief without semantic interpretation")
     brief.add_argument(
@@ -354,7 +358,66 @@ def _run_brief(args: argparse.Namespace) -> int:
         escalation=escalation,
         include_visualization=not args.no_visualization,
     )
-    if args.format == "json":
+    if args.format == "agent-json":
+        brief_dict = brief.to_dict()
+        rendered_citations = [
+            {
+                "citation_id": item.citation_id,
+                "label": item.evidence_label,
+                "local_url": item.local_url,
+                "page_number": item.page_number,
+                "validation_status": item.validation_status,
+            }
+            for item in citation_result.citations
+            if item.validation_status == "valid"
+        ]
+        is_partial = bool(brief.warnings) or brief.rationale_clarity != "clear"
+        payload = {
+            "schema_version": "1.0",
+            "status": "partial" if is_partial else "found",
+            "normalized_request": {
+                "ticker": retrieval.query.ticker,
+                "date": retrieval.query.date,
+                "broker": retrieval.query.broker,
+            },
+            "selected_report": {
+                "source_identifier": brief.source_identifier,
+                "title": brief.report_title,
+                "internal_publication_date": brief.internal_publication_date,
+            },
+            "brief": brief_dict,
+            "revisions": {
+                "status": brief.revisions_status,
+                "rows": brief_dict["revision_rows"],
+                "omitted_rows": brief.omitted_revision_rows,
+            },
+            "rationale_clarity": brief.rationale_clarity,
+            "context": {
+                "report_context": (
+                    rationale.extraction.report_context if rationale.extraction else None
+                ),
+                "management_contact": (
+                    rationale.extraction.management_contact if rationale.extraction else None
+                ),
+                "people_met": (
+                    [
+                        {"name": person.name, "role": person.role}
+                        for person in rationale.extraction.people_met
+                    ]
+                    if rationale.extraction
+                    else []
+                ),
+            },
+            "citations": rendered_citations,
+            "warnings": list(brief.warnings),
+            "requires_analyst_escalation": brief.requires_analyst_escalation,
+            "analyst": brief_dict["analyst"],
+            "email_draft": brief_dict["email_draft"],
+            "sent": False,
+            "rendered_markdown": render_markdown(brief),
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    elif args.format == "json":
         print(brief.to_json())
     elif args.format == "text":
         print(render_brief_text(brief), end="")

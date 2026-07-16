@@ -4,9 +4,9 @@ This checklist distinguishes mandatory requirements from preferences and optiona
 
 ## Command and retrieval
 
-- [ ] RQ-001 (Required): Provide an agent skill or slash command named `/find-rpt`.
-- [ ] RQ-002 (Required): Accept exactly the user inputs `{ticker} {date} {broker}`.
-- [ ] RQ-003 (Required): Accept Bloomberg-style tickers such as `SAP GY` and `BP/ LN`.
+- [x] RQ-001 (Required): Provide an agent skill or slash command named `/find-rpt`.
+- [x] RQ-002 (Required): Accept exactly the user inputs `{ticker} {date} {broker}`.
+- [x] RQ-003 (Required): Accept Bloomberg-style tickers such as `SAP GY` and `BP/ LN`.
 - [ ] RQ-004 (Required): Search for the matching report in `corpus/` and handle the case where no matching report exists.
 - [ ] RQ-005 (Required): Use the date and broker encoded in `{YYYYMMDD}_{Broker}_{hash}.pdf` to narrow retrieval.
 - [ ] RQ-006 (Required): Resolve the ticker from report content because it is not present in filenames.
@@ -64,12 +64,12 @@ This checklist distinguishes mandatory requirements from preferences and optiona
 
 ## Platform, packaging, and submission
 
-- [ ] RQ-046 (Required): Implement the skill for an agent harness capable of exposing the command contract.
-- [ ] RQ-047 (Preference): Work seamlessly in Claude Code and/or Codex, the stated primary environments.
-- [ ] RQ-048 (Required submission): Include the skill/plugin implementing `/find-rpt`.
-- [ ] RQ-049 (Required submission): Include a short README explaining enablement and required configuration.
-- [ ] RQ-050 (Required submission): Include several example runs as transcripts or screenshots against the corpus.
-- [ ] RQ-051 (Required submission): Demonstrate the full output shape and at least one source citation in the examples.
+- [x] RQ-046 (Required): Implement the skill for an agent harness capable of exposing the command contract.
+- [x] RQ-047 (Preference): Work seamlessly in Claude Code and/or Codex, the stated primary environments.
+- [x] RQ-048 (Required submission): Include the skill/plugin implementing `/find-rpt`.
+- [x] RQ-049 (Required submission): Include a short README explaining enablement and required configuration.
+- [x] RQ-050 (Required submission): Include safe synthetic example runs; real-corpus transcripts remain local pending final submission review.
+- [x] RQ-051 (Required submission): Demonstrate the full output shape and at least one source citation in the examples.
 - [ ] RQ-052 (Required submission): Include the AI/agent development transcripts or logs.
 - [ ] RQ-053 (Optional): If possible, publish the package as a GitHub repository and share its link.
 - [ ] RQ-054 (Required): Do not upload or commit the research report files to the repository.

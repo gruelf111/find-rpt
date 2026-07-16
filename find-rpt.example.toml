@@ -1,0 +1,10 @@
+[find_rpt]
+corpus_path = "corpus"
+cache_path = ".cache/find-rpt/citations"
+citation_viewer_host = "127.0.0.1"
+citation_viewer_port = 8765
+model_provider = "local-openai-compatible"
+model_url = "http://127.0.0.1:11434/v1/chat/completions"
+model_name = "local-rationale-model"
+model_api_key_env = "FIND_RPT_MODEL_API_KEY"
+no_model = false

@@ -301,3 +301,25 @@ A source/dependency guard test rejects named mail libraries, providers, credenti
 The final review found three material boundary gaps. First, JSON relied on the absence of a send method and the rendered not-sent sentence but did not carry an explicit machine-readable status. `EmailDraft` and `EscalationResult` now expose frozen, non-initializable `sent: false` fields. Second, a generic revision warning string could activate explicit materiality. Only the dedicated validated `materiality_indicators` field can now do so; confidence and warnings cannot override missing evidence. Third, standalone Markdown/text no-model output previously hid `rationale_clarity_unavailable` behind a generic no-escalation sentence. It now surfaces structured warnings.
 
 The analyst evidence audit also made the existing evidence tuple include explicit phone and lead/covering-role evidence used by the extracted fields. A regression assertion resolves each synthetic analyst field back to those evidence blocks. The no-send guard was expanded to cover draft-delivery names, provider endpoints, email credential variables, and clipboard integrations in addition to the original libraries and client actions.
+
+## 2026-07-17 - Agent-skill packaging
+
+### Thin launcher and authoritative renderer
+
+The Codex skill contains activation/procedure instructions, a deterministic command/configuration launcher, UI metadata, and one output-contract reference. The launcher invokes the installed package once through `python -m find_rpt brief --format agent-json`. It does not import PDF, retrieval, revision, rationale, citation, or escalation classes. A small `agent-json` CLI format wraps the already-built `ResearchBrief` and existing Markdown renderer so Codex and Claude do not reproduce presentation logic.
+
+Alternative considered: let each agent render the ordinary brief JSON. Rejected because it would duplicate ordering, omission, citation, visualization, and escalation behavior. Running separate JSON and Markdown commands was also rejected because it would repeat the full pipeline and model call.
+
+### Input, status, and configuration boundary
+
+Raw command parsing identifies exactly one supported date between ticker and broker, preserves punctuation and quoted text, normalizes compact/ISO/English dates, and leaves ticker/broker matching to the retrieval engine. Missing or multiple boundaries fail rather than guessing. The launcher maps process results into stable agent statuses and separately checks viewer availability without changing links. It rejects `sent` values other than false and absolute paths in returned JSON.
+
+Precedence is launcher options, environment, ignored `find-rpt.toml`, then safe defaults. Configuration covers corpus/cache, local model provider/name/URL/key-variable name, citation host/port, and no-model mode. Only a loopback OpenAI-compatible provider or no model is accepted. `.env.example` is documentation only.
+
+Codex is primary through `skills/find-rpt/`. The optional Claude project command passes `$ARGUMENTS` to the same launcher and contract. Synthetic examples, a conservative redaction helper, and the safe smoke test remain outside the skill bundle to keep it compact.
+
+### Final packaging-review hardening
+
+An installed skill must not assume that the repository is the current directory. `SKILL.md` therefore directs the agent to resolve the bundled launcher relative to the skill file; the repository-relative command remains only as a direct-development example. The documented PowerShell installer now resolves `CODEX_HOME` with an explicit `~/.codex` fallback instead of interpolating an unset variable.
+
+Agent JSON is serialized with ASCII escapes at the outer transport boundary. This avoids Windows legacy-console encoding failures for Unicode comparison bars while `json.loads` reconstructs the exact original Markdown. Configuration and process failures are also sanitized before serialization so an operating-system error cannot disclose an absolute local path. The smoke-test no-send scan covers the Python runtime, skill instructions and launcher, optional Claude command, and package dependencies.

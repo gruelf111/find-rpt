@@ -34,6 +34,7 @@ ENV/
 .env
 .env.*
 !.env.example
+find-rpt.toml
 *.pem
 *.key
 credentials*.json

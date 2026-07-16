@@ -2,7 +2,115 @@
 
 This repository implements deterministic retrieval, a PDF evidence layer, conservative estimate-revision extraction, bounded rationale interpretation, precise local citations, a concise research-brief renderer, and review-only ambiguity escalation. Given a Bloomberg ticker, corpus date, and broker, it selects one local PDF, validates estimate revisions, grounds the explanation, builds highlighted loopback citations, and renders Markdown, JSON, or terminal text with an optional compact estimate comparison and analyst clarification draft.
 
-It can draft a clarification email when validated material revisions remain unexplained. It cannot send, launch, transmit, or copy that draft, and it is not packaged as the final agent skill yet.
+It can draft a clarification email when validated material revisions remain unexplained. It cannot send, launch, transmit, or copy that draft. The repository now packages the pipeline as a Codex-first `/find-rpt` skill with an optional Claude Code command; both use the same thin launcher and authoritative Python renderer.
+
+## Clean-machine installation and agent enablement
+
+The supported runtime is Python 3.11 or newer. From a clean checkout, create and activate a virtual environment, then install the local package:
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+POSIX shells use `python3.11 -m venv .venv`, `source .venv/bin/activate`, and the same `python -m pip` commands. Installation creates the `find-rpt` console command and supports `python -m find_rpt`.
+
+Place source reports under the local `corpus/` directory, or configure another local directory. Never add PDFs to Git. Copy the safe configuration template if desired:
+
+```powershell
+Copy-Item find-rpt.example.toml find-rpt.toml
+```
+
+`find-rpt.toml` is ignored. `.env.example` lists the equivalent environment variables, but the project deliberately does not auto-load `.env` files. Set secrets in the shell or local process manager.
+
+Configuration precedence is:
+
+1. launcher CLI options;
+2. environment variables;
+3. `[find_rpt]` in `find-rpt.toml`;
+4. documented defaults.
+
+| Setting | Launcher option | Environment | TOML key | Default |
+| --- | --- | --- | --- | --- |
+| Corpus | `--corpus` | `FIND_RPT_CORPUS` | `corpus_path` | `corpus` |
+| Citation cache | `--cache-dir` | `FIND_RPT_CACHE_DIR` | `cache_path` | `.cache/find-rpt/citations` |
+| Model provider | `--model-provider` | `FIND_RPT_MODEL_PROVIDER` | `model_provider` | `local-openai-compatible` |
+| Model name | `--model-name` | `FIND_RPT_MODEL_NAME` | `model_name` | `local-rationale-model` |
+| Model URL | `--model-url` | `FIND_RPT_MODEL_URL` | `model_url` | loopback chat-completions URL |
+| API-key variable name | `--model-api-key-env` | `FIND_RPT_MODEL_API_KEY_ENV` | `model_api_key_env` | `FIND_RPT_MODEL_API_KEY` |
+| Viewer host | `--citation-viewer-host` | `FIND_RPT_CITATION_HOST` | `citation_viewer_host` | `127.0.0.1` |
+| Viewer port | `--citation-viewer-port` | `FIND_RPT_CITATION_PORT` | `citation_viewer_port` | `8765` |
+| No-model mode | `--no-model` | `FIND_RPT_NO_MODEL` | `no_model` | `false` |
+
+Only `local-openai-compatible` and `none` model providers are accepted. Both model and citation-viewer hosts must remain loopback. Provider `none` is equivalent to no-model mode and returns a transparent partial brief.
+
+Start the citation viewer in a separate terminal before using clickable citations:
+
+```powershell
+find-rpt citations serve --corpus corpus --cache-dir .cache/find-rpt/citations --host 127.0.0.1 --port 8765
+```
+
+No advance report index is required. The deterministic locator inventories filename candidates per query; citation metadata is created locally when the brief runs.
+
+### Codex
+
+The repository skill is at `skills/find-rpt/`. To install it into a personal Codex environment, copy only that directory into the Codex skills directory and restart or reload Codex:
+
+```powershell
+$codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+$skillsDir = Join-Path $codexHome 'skills'
+New-Item -ItemType Directory -Force $skillsDir | Out-Null
+Copy-Item -Recurse skills\find-rpt (Join-Path $skillsDir 'find-rpt')
+```
+
+The command uses the platform's normal `~/.codex/skills` directory when `CODEX_HOME` is unset. The copied skill resolves its bundled launcher relative to `SKILL.md`; it does not depend on the repository being the current directory. The `find-rpt` package must still be installed in the Python environment Codex invokes. When running directly from this repository, the launcher command is:
+
+```powershell
+python skills/find-rpt/scripts/find_rpt.py --command '/find-rpt BP/ LN 22 Jun 2026 "J.P. Morgan"'
+```
+
+Example Codex invocations:
+
+```text
+/find-rpt SAP GY 2026-06-22 "Kepler Cheuvreux"
+/find-rpt BP/ LN 22 Jun 2026 "J.P. Morgan"
+```
+
+The skill returns the Python renderer's Markdown unchanged. It does not parse PDFs or perform financial calculations itself.
+
+### Optional Claude Code command
+
+`.claude/commands/find-rpt.md` is a lightweight project command. Claude Code discovers it when opened at the repository root. It forwards `$ARGUMENTS` to the same launcher and output contract; no extraction or rendering logic is duplicated. If a Claude Code version does not support project commands in this format, run the launcher command above directly.
+
+### Smoke test, troubleshooting, and cleanup
+
+Run the safe smoke test after setup:
+
+```powershell
+python scripts/smoke_test.py
+```
+
+It checks package import, CLI availability, configuration, corpus accessibility without printing filenames or content, viewer connectivity, local model/no-model configuration, and the no-send architecture. Optionally add `--ticker`, `--date`, and `--broker` together to exercise one local report.
+
+Common failures:
+
+- `configuration_error`: check the corpus/cache paths, TOML types, and loopback host/port.
+- `model_unavailable`: start/configure the local model and key, or explicitly enable no-model mode.
+- `citation_viewer_unavailable`: start the viewer with settings matching the launcher; the returned URLs remain preserved.
+- `not_found`: verify query date and broker filename metadata, then the Bloomberg ticker. Do not broaden the result manually.
+- `ambiguous`: inspect corpus integrity; the system intentionally selects no report.
+- stale citation: delete the ignored citation cache and rerun the brief.
+
+Remove disposable local state without touching `corpus/`:
+
+```powershell
+Remove-Item -Recurse -Force .cache\find-rpt -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
+```
+
+Synthetic examples and safe local transcript/redaction instructions are under `examples/`. Real report output must remain local and uncommitted.
 
 ## Setup
 
