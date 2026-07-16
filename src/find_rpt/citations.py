@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 import fitz
 
 from .evidence import EvidenceBlock, EvidenceDocument, EvidencePage
+from .metadata import ReportMetadata
 from .rationale import RationaleResult
 from .revisions import RevisionResult, normalize_fiscal_period, normalize_metric
 
@@ -82,6 +83,7 @@ class CitationBuildResult:
     citations: tuple[CitationRecord, ...]
     failed_requests: int
     warnings: tuple[str, ...]
+    claim_bindings: tuple[tuple[str, str], ...] = ()
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -367,6 +369,41 @@ def requests_from_rationale(result: RationaleResult) -> tuple[CitationRequest, .
     return tuple(requests)
 
 
+def requests_from_metadata(
+    document_id: str, metadata: ReportMetadata
+) -> tuple[CitationRequest, ...]:
+    requests: list[CitationRequest] = []
+    if metadata.title and metadata.title_evidence_block_ids:
+        requests.append(
+            CitationRequest(
+                document_id,
+                metadata.title_evidence_block_ids,
+                "Report title",
+                "metadata:title",
+            )
+        )
+    if metadata.internal_publication_date and metadata.internal_publication_date_evidence_block_ids:
+        requests.append(
+            CitationRequest(
+                document_id,
+                metadata.internal_publication_date_evidence_block_ids,
+                "Internal publication date",
+                "metadata:publication_date",
+            )
+        )
+    for index, analyst in enumerate(metadata.analysts, 1):
+        if analyst.evidence_block_ids:
+            requests.append(
+                CitationRequest(
+                    document_id,
+                    analyst.evidence_block_ids,
+                    f"Analyst {index}",
+                    f"metadata:analyst:{index}",
+                )
+            )
+    return tuple(requests)
+
+
 class CitationBuilder:
     def __init__(
         self,
@@ -402,6 +439,7 @@ class CitationBuilder:
         warnings: list[str] = []
         failed = 0
         seen_ids: set[str] = set()
+        claim_bindings: list[tuple[str, str]] = []
         for request_index, request in enumerate(requests, start=1):
             label = " ".join(request.label.split())
             if request.document_id != document.document_id:
@@ -445,6 +483,8 @@ class CitationBuilder:
                     request.highlight_metric,
                     request.highlight_period,
                 )
+                if request.claim_key is not None:
+                    claim_bindings.append((request.claim_key, identifier))
                 if identifier in seen_ids:
                     continue
                 seen_ids.add(identifier)
@@ -473,6 +513,7 @@ class CitationBuilder:
             citations=tuple(citations),
             failed_requests=failed,
             warnings=tuple(warnings),
+            claim_bindings=tuple(dict.fromkeys(claim_bindings)),
         )
 
 

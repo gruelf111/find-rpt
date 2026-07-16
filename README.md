@@ -1,8 +1,8 @@
 # find-rpt
 
-This repository implements deterministic retrieval, a PDF evidence layer, conservative estimate-revision extraction, bounded rationale interpretation, and precise local citations. Given a Bloomberg ticker, corpus date, and broker, it returns one safely matched local PDF, exposes page-scoped text blocks with exact coordinates, structures explicitly revised financial metrics with arithmetic checks, retrieves a small evidence set for model-assisted explanation, and can build loopback-only links that open the cited page with visible passage highlights.
+This repository implements deterministic retrieval, a PDF evidence layer, conservative estimate-revision extraction, bounded rationale interpretation, precise local citations, and a concise research-brief renderer. Given a Bloomberg ticker, corpus date, and broker, it selects one local PDF, validates estimate revisions, grounds the explanation, builds highlighted loopback citations, and renders Markdown, JSON, or terminal text with an optional compact estimate comparison.
 
-It does not generate the final research brief or charts, or draft/send email. The rationale and citation milestones return structured grounded data and local citation metadata only.
+It does not draft or send email and is not packaged as the final agent skill yet.
 
 ## Setup
 
@@ -65,6 +65,44 @@ Direct local extraction, or passage retrieval without a model:
 find-rpt rationale --pdf-path "corpus/example.pdf" --format json
 find-rpt rationale --pdf-path "corpus/example.pdf" --no-model --format json
 ```
+
+Render the complete research brief:
+
+```powershell
+find-rpt brief --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux"
+find-rpt brief --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format json
+find-rpt brief --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format text
+```
+
+Use `--no-visualization` to suppress comparison bars. Use `--no-model` to exercise the entire local deterministic pipeline and render a transparent partial brief when no local rationale model is configured. A normal brief command without `--no-model` fails clearly if model configuration is missing; it never fills rationale gaps from general knowledge.
+
+### Brief output
+
+The default Markdown order is one-glance header, title and takeaway, revisions, rationale/context, estimate picture, first-read items, source/analyst information, then material warnings. When a unique top-of-page internal publication date differs from the corpus/query date, the header shows both with evidence. Empty optional sections are omitted. The concise view shows at most eight cited revision rows, two comparison panels, and four first-read items. It prioritizes rows with consensus and complete old/new values and then sorts revenue, EBITDA, EBIT, margins, EPS, modelling items, target price, and other metrics. An omission count is explicit; no missing value is inferred. `—` means unavailable.
+
+Synthetic example:
+
+```text
+ABC LN — Example Broker — 22 Jun 2026
+
+Synthetic Company: Pricing improves [source]
+Pricing supports the earnings outlook. [source]
+
+What changed
+Metric          Period    Old             New             Revision  Consensus
+Revenue         FY2026E   100 EURm        110 EURm        +10%      105 EURm
+Adjusted EPS    FY2027E   1.20 EUR/share  1.30 EUR/share  +8.3%     1.10 EUR/share
+
+Estimate picture
+EPS FY2027E (EUR/share)
+Old                  │█████████   1.2
+New                  │██████████  1.3
+Consensus            │████████    1.1
+```
+
+The actual Markdown uses a compact table and inline local links. Relative percentage changes and percentage-point margin moves are different fields; a 10% to 12% margin change renders as `+2pp`, not `+20%`. Negative observations use a zero-axis bar, and charts are omitted for a single value, equal values, non-finite values, or missing units. The text renderer is the plain-terminal fallback, preserves each citation URL in angle brackets, and uses the same Unicode block/axis representation supported by Codex and Claude Code terminals.
+
+Warnings are emitted only when they affect interpretation or completeness: unresolved/no revisions, unavailable rationale or takeaway, missing report title/analyst, failed or invalid citations, omitted uncited facts/rows, row caps, and material arithmetic conflicts. A report with no revisions remains a valid partial brief. Individual citation failures omit the affected facts and produce a transparent warning; a total citation-construction error, ambiguous or failed retrieval, unusable PDF, or model failure stops before a misleading complete brief is rendered. The `brief` command always extracts the complete selected PDF and deliberately has no `--pages` option.
 
 Build precise citations from deterministic revision evidence:
 
@@ -179,6 +217,8 @@ The URL and model name have the displayed defaults; the API key has no default. 
 
 The structured result includes rationale clarity; grounded drivers with metrics, periods, categories, evidence block IDs, causal-link type, and confidence; why-now; report context; management contact and named participants; one-line takeaway; jargon definitions; important first-read items; and warnings. Python rejects mismatched report/revision data, unknown block IDs, claims outside the bounded passages, unsupported metrics or fiscal periods, unsupported numbers, extra schema fields, and malformed types. A driver survives only when its cited sentence contains either direct causal language or explicit hedged causal language; proximity alone is removed. Rating or valuation evidence cannot become an earnings driver, and a `valuation only` driver must link to target price. Model/provider failures return an explicit warning and no invented fallback text.
 
+The brief renderer consumes only validated structured metadata, revision, rationale, and citation models. It does not parse PDFs, call a model, calculate authoritative revision values, or create evidence coordinates. A separate conservative front-matter adapter supplies a cited title and only retains analysts whose printed name and email appear together in report evidence; it never derives a name from an address.
+
 Confidence is deterministic, not model-calibrated. A driver is `high` only when it has direct causal support plus a supported metric and period; `medium` means direct support is incomplete or the causal link is explicitly hedged/inferred; `low` means only minimal structured linkage remains. Other grounded claims are `high` for strong single-block lexical support, `medium` for sufficient multi-block or partial lexical support, and otherwise removed or `low`.
 
 `revisions` returns `revisions_found`, `no_revisions`, or `candidates_unresolved`. The last status means revision signals were present but no safe row could be structured. A successful response includes candidate pages and block IDs plus revision rows with metric, qualifiers, period and period basis, old/new values, normalized unit, stated and calculated percentage changes, separately represented percentage-point changes, consensus and derived spreads when explicitly supported, direction, extraction method, confidence, warnings, and page/block evidence references. Missing values are JSON `null`.
@@ -243,9 +283,18 @@ source-page text membership, deterministic block order/IDs, direct-path extracti
 retrieval-to-evidence CLI integration, citation resolution, and correct page targeting.
 Corpus text and coordinates remain in memory and are not written to test artifacts.
 
+### Brief troubleshooting
+
+- `FIND_RPT_MODEL_API_KEY is not configured`: configure the loopback model above or add `--no-model` for a clearly labelled partial brief.
+- `rationale not available` or `semantic interpretation skipped`: the revision table and citations are still validated, but the explanation/takeaway is intentionally absent.
+- `report title not identified` or `analyst not identified`: the conservative front-matter rules did not find safe evidence. No contact detail is inferred.
+- `citation requests failed` or `uncited revision rows omitted`: affected facts are not rendered. Rebuild against the same source/evidence and inspect the citation error.
+- No estimate picture: fewer than two distinct finite observations with one validated unit were available, or `--no-visualization` was used.
+- Citation links do not open: start `find-rpt citations serve` with the same corpus/cache/host/port used by the brief. The local viewer is required for highlighted passage links.
+
 The revision tests cover arithmetic (including negative and zero old values), percentages versus percentage points and basis points, currency/scale/per-share units, fiscal/calendar periods, qualifiers, exact same-page consensus joins and spreads, unit mismatches, disclosure-only pages, unresolved table states, repeatability, CLI integration, evidence resolution, and 11 local reports across multiple brokers.
 
-Rationale tests cover candidate retrieval under dense revision evidence, context signals, explicit management participants, valid and invented evidence IDs, cross-document revision rejection, clear/partial/unclear rationale, proximity-only false drivers, rating/valuation separation, role and jargon validation, malformed/extra-schema output, provider failures, missing configuration, loopback enforcement, fake-model determinism, CLI behavior, and repeatability. Citation tests cover stable IDs, evidence/page resolution, geometry, multi-line and multi-block passages, multi-page splitting, stale sources, invalid IDs, traversal, unindexed access, loopback binding, cache privacy, period-specific table highlights, CLI integration, and viewer routes. Fifteen local reports across thirteen broker/layout families are checked in rationale retrieval-only mode. The complete suite currently contains 77 tests.
+Rationale tests cover candidate retrieval under dense revision evidence, context signals, explicit management participants, valid and invented evidence IDs, cross-document revision rejection, clear/partial/unclear rationale, proximity-only false drivers, rating/valuation separation, role and jargon validation, malformed/extra-schema output, provider failures, missing configuration, loopback enforcement, fake-model determinism, CLI behavior, and repeatability. Citation tests cover stable IDs, evidence/page resolution, geometry, multi-line and multi-block passages, multi-page splitting, stale sources, invalid IDs, traversal, unindexed access, loopback binding, cache privacy, period-specific table highlights, CLI integration, and viewer routes. Renderer tests additionally enforce citation gating, cross-document metadata rejection, full-document brief extraction, and URL-preserving text output. Fifteen local reports across thirteen broker/layout families are checked in rationale retrieval-only mode. The complete suite currently contains 102 tests.
 
 ## Current limitations
 

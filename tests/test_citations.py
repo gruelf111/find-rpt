@@ -81,6 +81,27 @@ class CitationTests(unittest.TestCase):
         self.assertNotIn(str(self.root), cached)
         self.assertNotIn("higher prices", cached)
 
+    def test_duplicate_evidence_keeps_all_claim_bindings(self) -> None:
+        result = self.build(
+            CitationRequest(
+                self.document.document_id,
+                (self.first_block.block_id,),
+                "First claim",
+                "claim:first",
+            ),
+            CitationRequest(
+                self.document.document_id,
+                (self.first_block.block_id,),
+                "Second claim",
+                "claim:second",
+            ),
+        )
+        self.assertEqual(len(result.citations), 1)
+        self.assertEqual(
+            {key for key, _ in result.claim_bindings},
+            {"claim:first", "claim:second"},
+        )
+
     def test_multiline_and_multiple_blocks_produce_precise_valid_boxes(self) -> None:
         result = self.build(self.request(self.first_block.block_id))
         citation = result.citations[0]

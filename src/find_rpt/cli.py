@@ -17,7 +17,10 @@ from .citations import (
     make_server,
     requests_from_rationale,
     requests_from_revisions,
+    requests_from_metadata,
 )
+from .brief import ResearchBriefBuilder, render_markdown, render_text as render_brief_text
+from .metadata import ReportMetadataExtractor
 from .retrieval import Candidate, RetrievalEngine, RetrievalResult
 from .revisions import RevisionExtractor
 from .rationale import ModelConfigurationError, RationaleExtractor
@@ -99,6 +102,19 @@ def build_parser() -> argparse.ArgumentParser:
     rationale.add_argument("--no-model", action="store_true", help="return candidate passages only")
     rationale.add_argument("--format", choices=("json",), default="json")
 
+    brief = subparsers.add_parser(
+        "brief", help="render a concise evidence-backed research brief"
+    )
+    brief.add_argument("--ticker", required=True, help="Bloomberg ticker")
+    brief.add_argument("--date", required=True, help="corpus date as YYYYMMDD or YYYY-MM-DD")
+    brief.add_argument("--broker", required=True, help="broker label")
+    brief.add_argument("--corpus", type=Path, default=Path("corpus"))
+    brief.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
+    brief.add_argument("--base-url", default=f"http://{DEFAULT_HOST}:{DEFAULT_PORT}")
+    brief.add_argument("--format", choices=("markdown", "json", "text"), default="markdown")
+    brief.add_argument("--no-visualization", action="store_true")
+    brief.add_argument("--no-model", action="store_true", help="render a transparent partial brief without semantic interpretation")
+
     citations = subparsers.add_parser(
         "citations", help="build, validate, and serve precise local citations"
     )
@@ -161,7 +177,7 @@ def _run_find(args: argparse.Namespace) -> int:
 
 def _run_evidence(args: argparse.Namespace) -> int:
     retrieval: RetrievalResult | None = None
-    if args.pdf_path is not None:
+    if getattr(args, "pdf_path", None) is not None:
         path = args.pdf_path
         source_root = None
     else:
@@ -179,7 +195,11 @@ def _run_evidence(args: argparse.Namespace) -> int:
         path = args.corpus / retrieval.match.filename
         source_root = args.corpus
     try:
-        document = PdfEvidenceExtractor().extract(path, pages=args.pages, source_root=source_root)
+        document = PdfEvidenceExtractor().extract(
+            path,
+            pages=getattr(args, "pages", None),
+            source_root=source_root,
+        )
     except EvidenceError as error:
         print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
         return 1
@@ -194,7 +214,7 @@ def _resolve_document(
     args: argparse.Namespace,
 ) -> tuple[RetrievalResult | None, EvidenceDocument | None, int]:
     retrieval: RetrievalResult | None = None
-    if args.pdf_path is not None:
+    if getattr(args, "pdf_path", None) is not None:
         path = args.pdf_path
         source_root = None
     else:
@@ -212,7 +232,11 @@ def _resolve_document(
         path = args.corpus / retrieval.match.filename
         source_root = args.corpus
     try:
-        document = PdfEvidenceExtractor().extract(path, pages=args.pages, source_root=source_root)
+        document = PdfEvidenceExtractor().extract(
+            path,
+            pages=getattr(args, "pages", None),
+            source_root=source_root,
+        )
     except EvidenceError as error:
         print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
         return retrieval, None, 1
@@ -251,6 +275,56 @@ def _run_rationale(args: argparse.Namespace) -> int:
         payload = {"retrieval": retrieval.to_dict(), "rationale": payload}
     print(json.dumps(payload, indent=2, ensure_ascii=False))
     return 0 if result.status != "model_error" else 1
+
+
+def _run_brief(args: argparse.Namespace) -> int:
+    retrieval, document, code = _resolve_document(args)
+    if code:
+        return code
+    source_path = args.corpus / retrieval.match.filename
+    metadata = ReportMetadataExtractor().extract(document)
+    revisions = RevisionExtractor().extract(document, broker=args.broker)
+    try:
+        rationale = RationaleExtractor().extract(
+            document,
+            revisions=revisions,
+            no_model=args.no_model,
+            broker=args.broker,
+        )
+    except ModelConfigurationError as error:
+        print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
+        return 1
+    if rationale.status == "model_error":
+        print(rationale.to_json(), file=sys.stderr)
+        return 1
+    requests = list(requests_from_metadata(document.document_id, metadata))
+    requests.extend(requests_from_revisions(revisions))
+    requests.extend(requests_from_rationale(rationale))
+    try:
+        citation_result = CitationBuilder(args.corpus, base_url=args.base_url).build(
+            document, source_path, requests
+        )
+        CitationStore(args.cache_dir).save(citation_result)
+    except CitationError as error:
+        print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
+        return 1
+    brief = ResearchBriefBuilder().build(
+        ticker=retrieval.query.ticker,
+        broker=retrieval.query.broker,
+        report_date=retrieval.query.date,
+        metadata=metadata,
+        revisions=revisions,
+        rationale=rationale,
+        citations=citation_result,
+        include_visualization=not args.no_visualization,
+    )
+    if args.format == "json":
+        print(brief.to_json())
+    elif args.format == "text":
+        print(render_brief_text(brief), end="")
+    else:
+        print(render_markdown(brief), end="")
+    return 0
 
 
 def _run_citation_build(args: argparse.Namespace) -> int:
@@ -347,7 +421,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.reconfigure(encoding="utf-8")
     argv = list(sys.argv[1:] if argv is None else argv)
     # Preserve the original positional retrieval interface while documenting `find`.
-    if argv and argv[0] not in {"find", "evidence", "revisions", "rationale", "citations", "-h", "--help"}:
+    if argv and argv[0] not in {"find", "evidence", "revisions", "rationale", "brief", "citations", "-h", "--help"}:
         argv.insert(0, "find")
     args = build_parser().parse_args(argv)
     if args.command == "find":
@@ -358,6 +432,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_revisions(args)
     if args.command == "rationale":
         return _run_rationale(args)
+    if args.command == "brief":
+        return _run_brief(args)
     if args.command == "citations":
         if args.citation_command == "build":
             return _run_citation_build(args)

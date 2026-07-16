@@ -56,8 +56,21 @@ from .citations import (
     StaleCitationError,
     make_server,
     requests_from_rationale,
+    requests_from_metadata,
     requests_from_revisions,
     source_fingerprint,
+)
+from .metadata import AnalystMetadata, ReportMetadata, ReportMetadataExtractor
+from .brief import (
+    BriefAnalyst,
+    BriefCitation,
+    BriefRevisionRow,
+    EstimateVisualization,
+    ResearchBrief,
+    ResearchBriefBuilder,
+    make_estimate_visualization,
+    render_markdown,
+    render_text as render_brief_text,
 )
 
 __all__ = [
@@ -76,5 +89,9 @@ __all__ = [
     "CitationBuildResult", "CitationBuilder", "CitationError", "CitationInputError",
     "CitationNotFoundError", "CitationRecord", "CitationRepository", "CitationRequest",
     "CitationStore", "StaleCitationError", "make_server", "requests_from_rationale",
-    "requests_from_revisions", "source_fingerprint",
+    "requests_from_revisions", "requests_from_metadata", "source_fingerprint",
+    "AnalystMetadata", "ReportMetadata", "ReportMetadataExtractor",
+    "BriefAnalyst", "BriefCitation", "BriefRevisionRow", "EstimateVisualization",
+    "ResearchBrief", "ResearchBriefBuilder", "make_estimate_visualization",
+    "render_markdown", "render_brief_text",
 ]

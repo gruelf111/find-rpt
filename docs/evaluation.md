@@ -1,10 +1,10 @@
-# Retrieval, evidence, revision, and bounded-rationale evaluation
+# Retrieval, evidence, revision, bounded-rationale, citation, and brief evaluation
 
 Evaluation date: 2026-07-16
 
 ## Scope
 
-This evaluation covers deterministic report retrieval, the PDF evidence layer, deterministic estimate-revision extraction, bounded rationale-passage retrieval, the rationale model boundary, post-model grounding validation, and precise local citation highlighting. Final brief rendering, charts, and email drafting remain out of scope. No external service is used.
+This evaluation covers deterministic report retrieval, the PDF evidence layer, deterministic estimate-revision extraction, bounded rationale-passage retrieval, the rationale model boundary, post-model grounding validation, precise local citation highlighting, and final structured brief rendering. Analyst-email escalation and skill packaging remain out of scope. No external service is used.
 
 The evaluation dataset contains query metadata and expected local filenames only. This document contains no report text, extracted passages, analyst contact data, report screenshots, or PDF-derived artifacts.
 
@@ -25,6 +25,10 @@ Revision-candidate pre-commit review result: **41 tests passed; 0 failed; 0 skip
 Bounded-rationale adversarial-review result: **60 tests passed; 0 failed; 0 skipped.**
 
 Citation final-review result: **77 tests passed; 0 failed; 0 skipped.**
+
+Brief-renderer focused result: **22 synthetic/CLI/corpus test methods passed; 0 failed; 0 skipped.**
+
+Final renderer-review suite result: **102 tests passed; 0 failed; 0 skipped.** Python compilation and `pip check` also passed; Ruff and mypy are not configured or installed.
 
 Coverage includes:
 
@@ -74,6 +78,55 @@ cross-document block IDs, changed sources, invalid citation IDs, traversal,
 unindexed files, loopback binding, correct page routes, no-store headers, cache
 privacy, revision/rationale structured-input adapters, and period-specific table
 highlight narrowing.
+
+Brief coverage additionally includes complete and partial briefs, no revisions, missing consensus, old/new/consensus comparisons, clear/partial/unclear rationale, absent context, management meetings, rating changes, negative and zero estimates, percentage-point margins, long metric names, multiple periods, citation presence/absence, visualization scaling/omission, Markdown/JSON/text, deterministic ordering, no empty sections, ambiguous retrieval, partial pipeline failure, conservative metadata, and shared-evidence claim bindings.
+
+## Research-brief rendering evaluation
+
+The complete `brief --no-model` path was exercised in memory across the eleven manually verified locator cases and eleven broker/layout families. This ran retrieval, full PDF evidence, revision extraction, bounded rationale passage selection, conservative front-matter extraction, citation construction, structured brief assembly, and all three renderer code paths without saving proprietary briefs. It intentionally used `--no-model`: no loopback rationale endpoint or key was configured, and policy prohibits sending report passages externally.
+
+| Measure | Result |
+| --- | ---: |
+| Real reports attempted | 11 |
+| Correct deterministic report selections | 11 / 11 |
+| Briefs produced in transparent partial mode | 11 / 11 |
+| Revision status distribution | 6 found / 3 unresolved / 2 none |
+| Validated source revision rows available | 178 |
+| Rows retained in concise views | 34 |
+| Rendered source/title/analyst/revision citation links counted | 52 |
+| Total title, date, analyst, and revision citations built | 199 |
+| Failed citation requests | 0 |
+| Reports with a comparison visualization | 5 / 11 |
+| Comparison panels | 8 |
+| Conservatively identified report titles | 11 / 11 |
+| Unique internal publication dates / material date differences shown | 8 / 2 |
+| Explicit analyst records | 8 across 4 reports |
+| Visible brief word count, min / max / average | 55 / 214 / 105.3 |
+| Absolute local paths in rendered output | 0 |
+| Proprietary generated briefs saved to repository | 0 |
+
+The materiality policy caused the three numeric consensus comparisons in the BofA layout to remain visible despite its 46-row extraction result. Reports with only percentage matrices, no unit, one observation, or equal observations omitted the visualization. Negative-value reports used the zero-axis representation. Every displayed revision row had at least one local citation; multi-source rows retained additional links through claim bindings.
+
+Synthetic output was manually read for section order, compactness, missing-value symbols, percentage versus percentage-point language, table alignment, negative/zero bars, inline citation placement, empty-section omission, and Markdown/text readability. All eleven real partial outputs were below 300 words and the longest was 214 words after the final review caps. This supports partial-format readability, but it is not a claim that every real semantic brief can be read in under one minute: real rationale and first-read prose were unavailable without a local model.
+
+### Accuracy and release-gate findings
+
+- Retrieval remained 11/11 and the previously validated 178 revision rows were unchanged.
+- Citation construction resolved every rendered row and produced zero failed requests. The renderer does not create page coordinates or repair invalid citations.
+- Every rendered title, analyst, and revision citation used by the BofA, Nordea, and Kepler partial briefs was opened through the live loopback viewer and returned HTTP 200. This exercises link resolution but is not substituted for the unavailable visual/manual review of three complete semantic briefs.
+- The front-matter adapter found a cited title candidate on all eleven first pages and a unique top-of-page publication date on eight; two differed from the corpus/query date and are shown separately. Eight analyst records survived the strict printed-name-plus-explicit-email rule; missing analysts remained warnings rather than inferred contacts.
+- No model-generated real-report rationale, context classification, management participant, takeaway, or first-read claim was produced. Therefore real rationale grounding, unsupported-claim count, context accuracy, and semantic one-minute readability remain **not measured**, not zero.
+- Synthetic validation retained no unsupported claim from the existing adversarial rationale suite. The renderer adds no factual prose beyond fixed descriptions of structured status/context fields.
+- Three complete real briefs could not be opened end to end because no local rationale model was configured. The citation builder and runtime corpus test did validate all citations used by the partial briefs, but this is not represented as the requested visual/manual review of three complete semantic briefs.
+
+Known rendering limitations:
+
+- The eight-row concise view is a deterministic materiality policy, not issuer-specific judgement; omitted count is explicit.
+- Front-matter title selection is geometric/lexical and conservative but has not had an independent eleven-report semantic title audit.
+- Analyst extraction requires name and email in the same evidence block, so split sidebars are intentionally missed.
+- JSON represents the concise view and omission count; it does not dump every extracted revision row.
+- Unicode block bars require a terminal font with block glyphs; values remain the plain-text fallback on each line.
+- Real semantic/manual release gates require a configured loopback model and local human review. No email escalation or skill packaging is present.
 
 ## Precise citation evaluation
 

@@ -237,3 +237,27 @@ the source filename from the citation record that just passed fingerprint
 validation, rather than trusting duplicated document-index filename metadata. Cache
 records whose embedded citation ID differs from their index key, or whose page
 geometry is empty/non-finite, now fail closed.
+
+## 2026-07-16 - Structured research-brief rendering
+
+### Validated-model boundary and section order
+
+`ResearchBriefBuilder` consumes `ReportMetadata`, `RevisionResult`, `RationaleResult`, and `CitationBuildResult`. It does not receive report text, parse a PDF, call a model, calculate an authoritative revision, or generate evidence geometry. A separate deterministic page-one metadata adapter supplies only a conservatively selected title and analyst records whose printed name and explicit email occur together. Missing metadata remains a warning.
+
+The Markdown/text order is one-glance identity, title/takeaway, what changed, why it changed and why now, estimate picture, first-read items, source/analyst information, and material warnings. Empty optional sections are omitted. This follows analyst reading order while keeping source identity and completeness caveats visible.
+
+### Materiality, revision ordering, and length target
+
+The concise view targets roughly 100-250 words before model-generated rationale, no more than two short rationale paragraphs, eight revision rows, two comparison panels, and four first-read items. The caps are deterministic rather than character truncation. Rows with consensus and complete old/new observations receive selection priority; selected rows are then ordered revenue, EBITDA, EBIT, margins, EPS, tax/interest/share count, target price, then other metrics and fiscal period. The brief reports the number omitted, and JSON preserves the structured concise-view result. Missing values use `—` and are never back-filled.
+
+Only arithmetic warnings that can change interpretation are shown beside the table: unit/consensus incompatibility, zero denominators, stated/calculated mismatches, and conflicting candidates. Extraction diagnostics remain structured but do not become a wall of user-facing warnings.
+
+### Terminal visualization
+
+The estimate picture is a dependency-free, zero-axis bar chart over discrete old, new, and consensus observations. Every line uses the same absolute scale within its panel; negative values extend left and positive values right. The label includes the validated unit, and number formatting avoids adding source precision. It does not draw a continuous range. A panel is omitted unless at least two distinct finite observations and one unit exist. The same plain text is embedded in Markdown code fences and returned as the terminal fallback.
+
+### Citation bindings and partial failure
+
+Citation identity remains evidence-based and excludes claim prose. Because several claims can legitimately share the same citation ID, `CitationBuildResult` now carries claim-to-citation bindings in addition to de-duplicated records. This preserves stable URLs while allowing every rendered claim to resolve inline.
+
+Retrieval ambiguity, unusable evidence, model failure, or a total citation-builder error stops rendering. A failed or invalid individual citation causes the affected fact to be omitted, with a material partial-brief warning. Metadata, revisions, rationale, and citations must share one document identity; metadata may omit its identity only for backwards-compatible synthetic callers. No revisions, unresolved revision candidates, `--no-model`, missing title/analyst, and omitted rows produce a transparent partial brief with material warnings. The brief CLI always extracts the full selected PDF and exposes no page-limited option. This milestone deliberately does not implement the unclear-rationale analyst-email escalation or skill packaging.
