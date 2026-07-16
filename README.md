@@ -1,8 +1,8 @@
 # find-rpt
 
-This repository implements deterministic retrieval, a PDF evidence layer, conservative estimate-revision extraction, and bounded rationale interpretation. Given a Bloomberg ticker, corpus date, and broker, it returns one safely matched local PDF, exposes page-scoped text blocks with exact coordinates, structures explicitly revised financial metrics with arithmetic checks, and can retrieve a small evidence set for model-assisted explanation.
+This repository implements deterministic retrieval, a PDF evidence layer, conservative estimate-revision extraction, bounded rationale interpretation, and precise local citations. Given a Bloomberg ticker, corpus date, and broker, it returns one safely matched local PDF, exposes page-scoped text blocks with exact coordinates, structures explicitly revised financial metrics with arithmetic checks, retrieves a small evidence set for model-assisted explanation, and can build loopback-only links that open the cited page with visible passage highlights.
 
-It does not generate the final research brief, render citation highlights or charts, or draft/send email. The rationale milestone returns structured grounded data only.
+It does not generate the final research brief or charts, or draft/send email. The rationale and citation milestones return structured grounded data and local citation metadata only.
 
 ## Setup
 
@@ -65,6 +65,101 @@ Direct local extraction, or passage retrieval without a model:
 find-rpt rationale --pdf-path "corpus/example.pdf" --format json
 find-rpt rationale --pdf-path "corpus/example.pdf" --no-model --format json
 ```
+
+Build precise citations from deterministic revision evidence:
+
+```powershell
+find-rpt citations build --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format json
+find-rpt citations build --pdf-path "corpus/example.pdf" --format json
+```
+
+The direct path must resolve under the configured `--corpus` directory. Add
+`--with-rationale` only when a loopback model is configured and citations for the
+validated rationale claims are also required.
+
+Start the local highlighted viewer:
+
+```powershell
+find-rpt citations serve
+```
+
+The server binds to `127.0.0.1:8765` by default. Stop it with `Ctrl+C`. Validate a
+cached citation without opening a browser:
+
+```powershell
+find-rpt citations validate --citation-id "cit-0123456789abcdef01234567"
+```
+
+Use matching `--host`, `--port`, `--corpus`, and `--cache-dir` options when the
+builder and viewer use non-default local settings. `--base-url` on `citations build`
+controls the portable local URLs placed in JSON. It must be a complete loopback
+HTTP origin with an explicit port; remote hosts, credentials, paths, queries, and
+fragments are rejected.
+
+## Local citation viewer
+
+A citation URL has the form:
+
+```text
+http://127.0.0.1:8765/citation/<citation-id>#evidence-target
+```
+
+Activating it resolves the citation ID through the local ignored index, verifies
+the source size and SHA-256 digest, opens the correct one-based page, lands at the
+evidence area, and overlays translucent highlights. The page label identifies the
+claim/evidence role. An `open original PDF` link serves the same indexed source
+through an opaque document ID and preserves the page fragment.
+
+The viewer uses PyMuPDF to render the cited page in memory and an inline SVG for
+the highlight boxes. It requires no PDF.js download, remote font, analytics, CDN,
+or other external asset. It does not create an annotated PDF or modify the source.
+Word boxes are merged into compact line fragments. For structured revision tables,
+the validated metric and fiscal period narrow the highlight to the relevant row,
+period cells, and necessary headers. Evidence spanning pages becomes separate
+citations.
+
+Generated metadata is stored at `.cache/find-rpt/citations/index.json` by default.
+It contains document fingerprints, portable corpus-relative filenames, pages,
+block IDs, boxes, labels, and local URLs, but no report passage or absolute path.
+The whole cache is disposable:
+
+```powershell
+Remove-Item -Recurse -Force .cache/find-rpt/citations
+```
+
+On POSIX systems use `rm -rf .cache/find-rpt/citations`. Rebuild citations after
+cleanup.
+
+### Privacy and security model
+
+- The server accepts loopback hosts only and defaults to `127.0.0.1`; `0.0.0.0`
+  and non-loopback addresses are rejected.
+- URL paths contain validated citation/document IDs, never report paths. Unknown
+  IDs, traversal attempts, and unindexed files are not served.
+- Only regular, non-symlink PDF files beneath the configured corpus root resolve.
+- The original-PDF route serves the source filename from the fingerprint-validated
+  citation record, not duplicated document-index path metadata.
+- Every request rechecks the source size and SHA-256 digest. A changed source
+  returns a clear stale-citation error instead of showing potentially wrong evidence.
+- PDF, image, HTML, and error responses use private `no-store` headers. The server
+  suppresses request logging and never logs extracted report text.
+- Shutting down the viewer closes the server only; source PDFs remain untouched.
+
+### Citation troubleshooting and fallback behavior
+
+- `source PDF changed after citation build`: rebuild evidence and citations from
+  the current source. Do not reuse the stale ID.
+- `citation ID is not indexed`: use the same cache directory for build, validate,
+  and serve, or rebuild the citation.
+- A 404 from a document URL means the document is not indexed/cited or its safe
+  corpus-relative path no longer resolves.
+- A viewer URL using a custom port must be built with the corresponding
+  `--base-url`, although the citation ID itself remains valid on another loopback
+  viewer instance.
+- Image-only PDFs remain unsupported because evidence extraction has no OCR. The
+  viewer intentionally has no annotated-derivative fallback: if safe in-memory page
+  rendering fails, it returns an error and leaves the original untouched. The
+  original-PDF link is a navigation aid, not a substitute for a highlighted citation.
 
 `--no-model` returns the selected candidate passages, deterministic context signals, revision status, and exact model-input block/character counts. It marks semantic interpretation as skipped. Without `--no-model`, missing model configuration fails clearly.
 
@@ -142,15 +237,15 @@ On POSIX shells, use `PYTHONPATH=src python -m unittest discover -s tests -v`.
 
 `tests/evaluation_cases.json` contains 11 manually verified query/filename pairs. `tests/revision_evaluation_cases.json` contains only safe filename/broker metadata and expected extraction status/counts for 11 real reports. Neither file contains PDF text, financial values, coordinates, or screenshots.
 
-The evidence tests also run extraction against five local broker/layout families when
+The evidence and citation tests also run extraction against local broker/layout families when
 `corpus/` is available. They validate one-based page numbering, bounded rectangles,
 source-page text membership, deterministic block order/IDs, direct-path extraction,
-and retrieval-to-evidence CLI integration. Corpus text and coordinates remain in
-memory and are not written to test artifacts.
+retrieval-to-evidence CLI integration, citation resolution, and correct page targeting.
+Corpus text and coordinates remain in memory and are not written to test artifacts.
 
 The revision tests cover arithmetic (including negative and zero old values), percentages versus percentage points and basis points, currency/scale/per-share units, fiscal/calendar periods, qualifiers, exact same-page consensus joins and spreads, unit mismatches, disclosure-only pages, unresolved table states, repeatability, CLI integration, evidence resolution, and 11 local reports across multiple brokers.
 
-Rationale tests cover candidate retrieval under dense revision evidence, context signals, explicit management participants, valid and invented evidence IDs, cross-document revision rejection, clear/partial/unclear rationale, proximity-only false drivers, rating/valuation separation, role and jargon validation, malformed/extra-schema output, provider failures, missing configuration, loopback enforcement, fake-model determinism, CLI behavior, and repeatability. Fifteen local reports across thirteen broker/layout families are checked in retrieval-only mode, including results preview/review, rating change, roadshow, and management-meeting samples. The complete suite currently contains 60 tests.
+Rationale tests cover candidate retrieval under dense revision evidence, context signals, explicit management participants, valid and invented evidence IDs, cross-document revision rejection, clear/partial/unclear rationale, proximity-only false drivers, rating/valuation separation, role and jargon validation, malformed/extra-schema output, provider failures, missing configuration, loopback enforcement, fake-model determinism, CLI behavior, and repeatability. Citation tests cover stable IDs, evidence/page resolution, geometry, multi-line and multi-block passages, multi-page splitting, stale sources, invalid IDs, traversal, unindexed access, loopback binding, cache privacy, period-specific table highlights, CLI integration, and viewer routes. Fifteen local reports across thirteen broker/layout families are checked in rationale retrieval-only mode. The complete suite currently contains 77 tests.
 
 ## Current limitations
 
@@ -175,3 +270,6 @@ Rationale tests cover candidate retrieval under dense revision evidence, context
 - Inferred drivers require explicit hedging and causal wording in one cited sentence; genuinely implicit broker reasoning can therefore be omitted and marked unclear.
 - Jargon definitions are retained only for a small deterministic glossary or when the report explicitly defines the term. Unsupported house-specific expansions are removed.
 - Real-report semantic accuracy requires a configured local model and manual claim review. The checked-in evaluation records bounded retrieval results but does not claim model accuracy without such a run.
+- Citation page rendering is rasterized at 1.5x for a dependency-free local viewer; it is not a replacement for the PDF's native search, selectable text, forms, or accessibility tree.
+- Revision-table line narrowing is deterministic and conservative. It can retain another period stated in the same compact source line, and it falls back to the validated block geometry when no safe row/period selector resolves.
+- The citation cache is not a background catalog. URLs work only while a viewer using the matching corpus and cache is running.

@@ -43,6 +43,22 @@ from .rationale import (
     RationaleResult,
     detect_context_signals,
 )
+from .citations import (
+    CitationBuildResult,
+    CitationBuilder,
+    CitationError,
+    CitationInputError,
+    CitationNotFoundError,
+    CitationRecord,
+    CitationRepository,
+    CitationRequest,
+    CitationStore,
+    StaleCitationError,
+    make_server,
+    requests_from_rationale,
+    requests_from_revisions,
+    source_fingerprint,
+)
 
 __all__ = [
     "EncryptedPdfError", "EvidenceBlock", "EvidenceDocument", "EvidenceError",
@@ -57,4 +73,8 @@ __all__ = [
     "ModelConfigurationError", "ModelResponseError", "PersonMet", "RationaleExtraction",
     "RationaleExtractor", "RationaleInputError", "RationaleModel", "RationaleResult",
     "detect_context_signals",
+    "CitationBuildResult", "CitationBuilder", "CitationError", "CitationInputError",
+    "CitationNotFoundError", "CitationRecord", "CitationRepository", "CitationRequest",
+    "CitationStore", "StaleCitationError", "make_server", "requests_from_rationale",
+    "requests_from_revisions", "source_fingerprint",
 ]

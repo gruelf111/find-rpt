@@ -4,7 +4,7 @@ Evaluation date: 2026-07-16
 
 ## Scope
 
-This evaluation covers deterministic report retrieval, the PDF evidence layer, deterministic estimate-revision extraction, bounded rationale-passage retrieval, the rationale model boundary, and post-model grounding validation. Final brief rendering, citation highlighting, charts, and email drafting remain out of scope. No external service is used.
+This evaluation covers deterministic report retrieval, the PDF evidence layer, deterministic estimate-revision extraction, bounded rationale-passage retrieval, the rationale model boundary, post-model grounding validation, and precise local citation highlighting. Final brief rendering, charts, and email drafting remain out of scope. No external service is used.
 
 The evaluation dataset contains query metadata and expected local filenames only. This document contains no report text, extracted passages, analyst contact data, report screenshots, or PDF-derived artifacts.
 
@@ -23,6 +23,8 @@ Pre-commit evidence-layer review result: **28 tests passed; 0 failed; 0 skipped.
 Revision-candidate pre-commit review result: **41 tests passed; 0 failed; 0 skipped.**
 
 Bounded-rationale adversarial-review result: **60 tests passed; 0 failed; 0 skipped.**
+
+Citation final-review result: **77 tests passed; 0 failed; 0 skipped.**
 
 Coverage includes:
 
@@ -64,6 +66,74 @@ Rationale coverage additionally includes:
 - deterministic fake-model behavior and repeatable structured output;
 - UTF-8 CLI output on Windows; and
 - fifteen local reports with repeatable inputs bounded to 24 blocks and 12,000 characters.
+
+Citation coverage additionally includes stable IDs, selected-document checks,
+evidence-to-page resolution, finite/in-bounds geometry, word/line box merging,
+multi-line and multi-block passages, multi-page splitting, invalid and
+cross-document block IDs, changed sources, invalid citation IDs, traversal,
+unindexed files, loopback binding, correct page routes, no-store headers, cache
+privacy, revision/rationale structured-input adapters, and period-specific table
+highlight narrowing.
+
+## Precise citation evaluation
+
+The locator-backed `citations build` command was run for five revision-bearing
+broker/layout families. The ignored local cache contained 176 citations across the
+five selected documents. A complete deterministic validation pass resolved
+**176/176** against the current source size, digest, page, block IDs, and boxes, with
+zero failed resolutions. No report text, screenshots, coordinates, or local URLs
+from the cache are committed.
+
+| Measure | Result |
+| --- | ---: |
+| Citations generated | 176 |
+| Citations resolving successfully | 176 / 176 |
+| Failed evidence resolutions | 0 |
+| Manually opened real citations | 10 |
+| Broker/layout families manually reviewed | 5 |
+| Correct-page rate | 10 / 10 (100%) |
+| Correct-passage highlight rate | 10 / 10 (100%) |
+| Overly broad highlights after refinement | 0 / 10 |
+| Stale-citation detection | Pass (build, validator, and HTTP 409) |
+| Invalid/traversal/unindexed/arbitrary-path HTTP checks | 4 / 4 rejected with HTTP 404 and no path disclosure |
+| Repeated citation-ID generation | 176 / 176 identical |
+| Multiple-block real citations | 165 |
+
+Every sample citation was regenerated during the final review, opened in the
+loopback viewer, and visually checked against the rendered source page. The first
+manual pass found two viewer defects: evidence
+anchors could run before image layout, and a table-sized block could highlight
+unrelated rows. A later metadata audit found a compact row that retained its label
+but lost separately positioned old/new cells. The final implementation uses a
+normal-flow URL fragment for landing plus deterministic metric/period and same-row
+cell selection. All ten final citations were re-opened after those fixes.
+
+Only safe manual-review metadata is recorded:
+
+| Document hash | Broker/layout | Page | Highlight boxes | Correct page | Relevant passage | Unrelated text included | Result |
+| --- | --- | ---: | ---: | --- | --- | --- | --- |
+| `870f45ba29947eb5` | BofA Global Research | 1 | 3 | Pass | Pass | No | Pass |
+| `870f45ba29947eb5` | BofA Global Research | 1 | 7 | Pass | Pass | No | Pass |
+| `ba6b57292ed2b5c5` | Nordea Equity Research | 1 | 3 | Pass | Pass | No | Pass |
+| `ba6b57292ed2b5c5` | Nordea Equity Research | 1 | 4 | Pass | Pass | No | Pass |
+| `cca068928dc517a6` | Intermonte Securities | 4 | 7 | Pass | Pass | No | Pass |
+| `cca068928dc517a6` | Intermonte Securities | 4 | 7 | Pass | Pass | No | Pass |
+| `2c440c5dc94f1a86` | Stifel Nicolaus | 1 | 1 | Pass | Pass | No | Pass |
+| `7ac075ece8b8d0fe` | Kepler Cheuvreux | 1 | 2 | Pass | Pass | No | Pass |
+| `7ac075ece8b8d0fe` | Kepler Cheuvreux | 1 | 2 | Pass | Pass | No | Pass |
+| `7ac075ece8b8d0fe` | Kepler Cheuvreux | 1 | 2 | Pass | Pass | No | Pass |
+
+Known viewer limitations:
+
+- cited pages are rasterized at 1.5x and do not expose the source PDF's selectable
+  text, native search, forms, or accessibility structure;
+- a compact source line containing two fiscal periods can retain both because
+  splitting a word-level source statement more aggressively could hide context;
+- line narrowing depends on the embedded text geometry and has no OCR fallback;
+- the ignored cache and a running matching loopback server are required for URLs;
+  and
+- the original-PDF link lands on the page but has no overlay; the local page viewer
+  is the highlighted citation surface.
 
 ## Bounded-rationale evaluation
 

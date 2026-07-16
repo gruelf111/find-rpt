@@ -159,3 +159,81 @@ The extractor now rejects cross-document revision data before building a payload
 Driver validation is sentence-scoped. `explicit` requires direct causal wording plus sufficient driver-term support in the same cited sentence. `inferred` requires explicit hedged causal wording, not simple adjacency. Proximity-only output is removed. A `valuation only` driver is accepted only for target-price linkage and cannot explain an earnings metric. Management participants require both literal name evidence and an explicit interaction in the cited block; role-specific words must resolve. Jargon definitions are limited to a small deterministic standard glossary or an explicit source definition.
 
 Confidence is recalculated by Python. A high-confidence driver has direct causal support and supported metric/period linkage; medium means explicit support is incomplete or the source itself hedges the causal link; low is reserved for minimal surviving linkage. Grounded non-driver claims use deterministic lexical/evidence concentration rather than the model's self-assessment.
+
+## 2026-07-16 - Precise local citation viewer
+
+### Viewer instead of annotated derivative PDFs
+
+The citation target is a small standard-library HTTP server bound to loopback. It
+uses PyMuPDF to render only the cited page in memory and overlays validated boxes in
+an inline SVG. This avoids a remote PDF.js/CDN dependency, does not copy or rewrite
+the source, and keeps the implementation within the existing dependency set. The
+viewer also exposes the indexed original PDF behind an opaque document-ID route and
+the correct page fragment, but the highlighted page is the authoritative citation
+surface.
+
+Alternative considered: temporary annotated derivative PDFs. Rejected because a
+browser overlay is easier to delete, does not create another report file, supports
+multiple translucent boxes without changing source bytes, and has a smaller risk of
+accidental redistribution. There is deliberately no annotated-PDF fallback. A safe
+render failure is explicit.
+
+### Document and citation identity
+
+Document identity remains `sha256:<content digest>`, calculated from PDF bytes and
+independent of absolute path. Citation records additionally retain source byte size,
+the full digest, and a safe corpus-relative filename. The server recomputes size and
+digest before every citation, page-image, or original-PDF response. A mismatch is a
+stale citation and returns conflict instead of rendering.
+
+Citation IDs are a SHA-256-derived `cit-` token over schema version, document ID,
+one-based page, ordered validated block IDs, and deterministic metric/period line
+selectors. Labels, absolute paths, host, and port are excluded. The ID therefore
+remains repeatable for an unchanged source and claim evidence while distinct fiscal
+periods sharing a table block can receive distinct claim-specific highlights.
+
+### Bounding-box validation and merge policy
+
+Every request names the selected document ID and one or more existing evidence block
+IDs. Unknown or cross-document references fail and emit no citation. Coordinates
+must be finite, ordered, and within page dimensions with a documented 0.5-point
+tolerance; accepted coordinates are clipped to the exact page edge. Word boxes are
+preferred. Adjacent words on the same extracted line merge only when the horizontal
+gap is at most four points and their vertical ranges overlap. Lines and distant
+cells remain separate.
+
+For a deterministic revision request, Python carries the already validated metric
+and period into the geometry selector. It keeps the metric label, the requested
+period header/cells, old/new/change cells aligned to the metric row, and necessary
+consensus evidence. A compact label with separate numeric cells adds only cells to
+its right; a compact prose/header line that already contains values does not absorb
+unrelated same-height columns. If the selector cannot find a safe line, it falls
+back to all validated words in the evidence block and records a warning rather than
+inventing coordinates.
+
+### Multi-page evidence
+
+A citation record is single-page. Evidence IDs spanning pages are grouped by their
+actual source page and emitted as separate citations, each with
+`split_from_multi_page_evidence`. This avoids a link that lands on one page while
+claiming to highlight evidence elsewhere.
+
+### Cache and server security
+
+The ignored `.cache/find-rpt/citations/index.json` stores fingerprints, portable
+filenames, block IDs, geometry, short labels, validation state, and URLs; it stores
+no report text or absolute path. The server accepts loopback addresses only,
+suppresses request logs, applies no-store and restrictive browser headers, rejects
+unrecognized ID-shaped routes and traversal, and resolves only regular non-symlink
+PDFs beneath the configured corpus. Direct paths are never URL parameters.
+
+### Final review hardening
+
+The release-gate review made the loopback origin part of the citation-builder
+boundary as well as the server boundary: a base URL must be a plain loopback HTTP
+origin with an explicit port. This prevents generated user-facing citation metadata
+from pointing at a remote or path-prefixed origin. The original-PDF route also uses
+the source filename from the citation record that just passed fingerprint
+validation, rather than trusting duplicated document-index filename metadata. Cache
+records whose embedded citation ID differs from their index key, or whose page
+geometry is empty/non-finite, now fail closed.

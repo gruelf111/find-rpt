@@ -6,6 +6,18 @@ import sys
 from pathlib import Path
 
 from .evidence import EvidenceDocument, EvidenceError, PdfEvidenceExtractor
+from .citations import (
+    DEFAULT_CACHE,
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    CitationBuilder,
+    CitationError,
+    CitationRepository,
+    CitationStore,
+    make_server,
+    requests_from_rationale,
+    requests_from_revisions,
+)
 from .retrieval import Candidate, RetrievalEngine, RetrievalResult
 from .revisions import RevisionExtractor
 from .rationale import ModelConfigurationError, RationaleExtractor
@@ -86,6 +98,47 @@ def build_parser() -> argparse.ArgumentParser:
     rationale.add_argument("--pages", help="one-based pages, e.g. 1-3,5")
     rationale.add_argument("--no-model", action="store_true", help="return candidate passages only")
     rationale.add_argument("--format", choices=("json",), default="json")
+
+    citations = subparsers.add_parser(
+        "citations", help="build, validate, and serve precise local citations"
+    )
+    citation_commands = citations.add_subparsers(dest="citation_command", required=True)
+    citation_build = citation_commands.add_parser(
+        "build", help="build citations from validated extraction evidence"
+    )
+    source = citation_build.add_mutually_exclusive_group(required=True)
+    source.add_argument("--pdf-path", type=Path)
+    source.add_argument("--ticker", help="Bloomberg ticker")
+    citation_build.add_argument("--date", help="required with --ticker")
+    citation_build.add_argument("--broker", help="required with --ticker")
+    citation_build.add_argument("--corpus", type=Path, default=Path("corpus"))
+    citation_build.add_argument("--pages", help="one-based pages, e.g. 1-3,5")
+    citation_build.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
+    citation_build.add_argument(
+        "--base-url", default=f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"
+    )
+    citation_build.add_argument(
+        "--with-rationale",
+        action="store_true",
+        help="also build citations for locally interpreted rationale claims",
+    )
+    citation_build.add_argument("--format", choices=("json",), default="json")
+
+    citation_validate = citation_commands.add_parser(
+        "validate", help="validate one cached citation against its source PDF"
+    )
+    citation_validate.add_argument("--citation-id", required=True)
+    citation_validate.add_argument("--corpus", type=Path, default=Path("corpus"))
+    citation_validate.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
+    citation_validate.add_argument("--format", choices=("json",), default="json")
+
+    citation_serve = citation_commands.add_parser(
+        "serve", help="start the loopback-only highlighted citation viewer"
+    )
+    citation_serve.add_argument("--corpus", type=Path, default=Path("corpus"))
+    citation_serve.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
+    citation_serve.add_argument("--host", default=DEFAULT_HOST)
+    citation_serve.add_argument("--port", type=int, default=DEFAULT_PORT)
     return parser
 
 
@@ -200,6 +253,93 @@ def _run_rationale(args: argparse.Namespace) -> int:
     return 0 if result.status != "model_error" else 1
 
 
+def _run_citation_build(args: argparse.Namespace) -> int:
+    retrieval, document, code = _resolve_document(args)
+    if code:
+        return code
+    if args.pdf_path is not None:
+        source_path = args.pdf_path
+    else:
+        source_path = args.corpus / retrieval.match.filename
+    revisions = RevisionExtractor().extract(document, broker=args.broker)
+    requests = list(requests_from_revisions(revisions))
+    rationale = None
+    if args.with_rationale:
+        try:
+            rationale = RationaleExtractor().extract(
+                document, revisions=revisions, broker=args.broker
+            )
+        except ModelConfigurationError as error:
+            print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
+            return 1
+        if rationale.status == "model_error":
+            print(rationale.to_json(), file=sys.stderr)
+            return 1
+        requests.extend(requests_from_rationale(rationale))
+    try:
+        result = CitationBuilder(args.corpus, base_url=args.base_url).build(
+            document, source_path, requests
+        )
+        CitationStore(args.cache_dir).save(result)
+    except CitationError as error:
+        print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
+        return 1
+    payload = result.to_dict()
+    payload["revision_status"] = revisions.status
+    if rationale is not None:
+        payload["rationale_status"] = rationale.status
+    if retrieval is not None:
+        payload = {"retrieval": retrieval.to_dict(), "citation_build": payload}
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _run_citation_validate(args: argparse.Namespace) -> int:
+    try:
+        citation = CitationRepository(
+            args.corpus, CitationStore(args.cache_dir)
+        ).validate(args.citation_id)
+    except CitationError as error:
+        print(json.dumps({"status": "invalid", "error": type(error).__name__, "message": str(error)}))
+        return 1
+    print(
+        json.dumps(
+            {
+                "status": "valid",
+                "citation_id": citation.citation_id,
+                "document_id": citation.document_id,
+                "page_number": citation.page_number,
+                "highlight_box_count": len(citation.bounding_boxes),
+                "local_url": citation.local_url,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _run_citation_serve(args: argparse.Namespace) -> int:
+    try:
+        server = make_server(
+            args.corpus,
+            args.cache_dir,
+            host=args.host,
+            port=args.port,
+        )
+    except CitationError as error:
+        print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
+        return 1
+    host, port = server.server_address[:2]
+    print(f"Citation viewer listening on http://{host}:{port}", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -207,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.reconfigure(encoding="utf-8")
     argv = list(sys.argv[1:] if argv is None else argv)
     # Preserve the original positional retrieval interface while documenting `find`.
-    if argv and argv[0] not in {"find", "evidence", "revisions", "rationale", "-h", "--help"}:
+    if argv and argv[0] not in {"find", "evidence", "revisions", "rationale", "citations", "-h", "--help"}:
         argv.insert(0, "find")
     args = build_parser().parse_args(argv)
     if args.command == "find":
@@ -218,6 +358,13 @@ def main(argv: list[str] | None = None) -> int:
         return _run_revisions(args)
     if args.command == "rationale":
         return _run_rationale(args)
+    if args.command == "citations":
+        if args.citation_command == "build":
+            return _run_citation_build(args)
+        if args.citation_command == "validate":
+            return _run_citation_validate(args)
+        if args.citation_command == "serve":
+            return _run_citation_serve(args)
     build_parser().print_help()
     return 1
 
