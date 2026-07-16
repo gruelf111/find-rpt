@@ -1,8 +1,8 @@
 # find-rpt
 
-This repository implements deterministic retrieval, a PDF evidence layer, and conservative estimate-revision candidate extraction. Given a Bloomberg ticker, corpus date, and broker, it returns one safely matched local PDF, exposes page-scoped text blocks with exact coordinates, and can structure explicitly revised financial metrics with arithmetic checks.
+This repository implements deterministic retrieval, a PDF evidence layer, conservative estimate-revision extraction, and bounded rationale interpretation. Given a Bloomberg ticker, corpus date, and broker, it returns one safely matched local PDF, exposes page-scoped text blocks with exact coordinates, structures explicitly revised financial metrics with arithmetic checks, and can retrieve a small evidence set for model-assisted explanation.
 
-It does not generate the final research brief, infer revision rationale, use an LLM, render citation highlights or charts, or draft/send email.
+It does not generate the final research brief, render citation highlights or charts, or draft/send email. The rationale milestone returns structured grounded data only.
 
 ## Setup
 
@@ -52,6 +52,39 @@ Direct extraction from exactly one local PDF:
 ```powershell
 find-rpt revisions --pdf-path "corpus/example.pdf" --format json
 ```
+
+Bounded rationale extraction after deterministic report selection:
+
+```powershell
+find-rpt rationale --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format json
+```
+
+Direct local extraction, or passage retrieval without a model:
+
+```powershell
+find-rpt rationale --pdf-path "corpus/example.pdf" --format json
+find-rpt rationale --pdf-path "corpus/example.pdf" --no-model --format json
+```
+
+`--no-model` returns the selected candidate passages, deterministic context signals, revision status, and exact model-input block/character counts. It marks semantic interpretation as skipped. Without `--no-model`, missing model configuration fails clearly.
+
+## Rationale model configuration
+
+The model boundary is the `RationaleModel` protocol. Tests use `DeterministicFakeRationaleModel`. The configured runtime provider speaks the OpenAI-compatible chat-completions shape but deliberately accepts only `localhost` or another loopback address, so proprietary passages cannot be sent to an external service.
+
+Configuration is environment-only:
+
+```powershell
+$env:FIND_RPT_MODEL_API_KEY="local-endpoint-key"
+$env:FIND_RPT_MODEL_URL="http://127.0.0.1:11434/v1/chat/completions"
+$env:FIND_RPT_MODEL_NAME="local-rationale-model"
+```
+
+The URL and model name have the displayed defaults; the API key has no default. No `.env` file is loaded. The provider sends only the bounded candidate passages, a grouped revision summary, deterministic context hints, and allowed enum values. It never sends a PDF or unrelated report.
+
+The structured result includes rationale clarity; grounded drivers with metrics, periods, categories, evidence block IDs, causal-link type, and confidence; why-now; report context; management contact and named participants; one-line takeaway; jargon definitions; important first-read items; and warnings. Python rejects mismatched report/revision data, unknown block IDs, claims outside the bounded passages, unsupported metrics or fiscal periods, unsupported numbers, extra schema fields, and malformed types. A driver survives only when its cited sentence contains either direct causal language or explicit hedged causal language; proximity alone is removed. Rating or valuation evidence cannot become an earnings driver, and a `valuation only` driver must link to target price. Model/provider failures return an explicit warning and no invented fallback text.
+
+Confidence is deterministic, not model-calibrated. A driver is `high` only when it has direct causal support plus a supported metric and period; `medium` means direct support is incomplete or the causal link is explicitly hedged/inferred; `low` means only minimal structured linkage remains. Other grounded claims are `high` for strong single-block lexical support, `medium` for sufficient multi-block or partial lexical support, and otherwise removed or `low`.
 
 `revisions` returns `revisions_found`, `no_revisions`, or `candidates_unresolved`. The last status means revision signals were present but no safe row could be structured. A successful response includes candidate pages and block IDs plus revision rows with metric, qualifiers, period and period basis, old/new values, normalized unit, stated and calculated percentage changes, separately represented percentage-point changes, consensus and derived spreads when explicitly supported, direction, extraction method, confidence, warnings, and page/block evidence references. Missing values are JSON `null`.
 
@@ -115,7 +148,9 @@ source-page text membership, deterministic block order/IDs, direct-path extracti
 and retrieval-to-evidence CLI integration. Corpus text and coordinates remain in
 memory and are not written to test artifacts.
 
-The revision tests cover arithmetic (including negative and zero old values), percentages versus percentage points and basis points, currency/scale/per-share units, fiscal/calendar periods, qualifiers, exact same-page consensus joins and spreads, unit mismatches, disclosure-only pages, unresolved table states, repeatability, CLI integration, evidence resolution, and 11 local reports across multiple brokers. The complete suite currently contains 41 tests.
+The revision tests cover arithmetic (including negative and zero old values), percentages versus percentage points and basis points, currency/scale/per-share units, fiscal/calendar periods, qualifiers, exact same-page consensus joins and spreads, unit mismatches, disclosure-only pages, unresolved table states, repeatability, CLI integration, evidence resolution, and 11 local reports across multiple brokers.
+
+Rationale tests cover candidate retrieval under dense revision evidence, context signals, explicit management participants, valid and invented evidence IDs, cross-document revision rejection, clear/partial/unclear rationale, proximity-only false drivers, rating/valuation separation, role and jargon validation, malformed/extra-schema output, provider failures, missing configuration, loopback enforcement, fake-model determinism, CLI behavior, and repeatability. Fifteen local reports across thirteen broker/layout families are checked in retrieval-only mode, including results preview/review, rating change, roadshow, and management-meeting samples. The complete suite currently contains 60 tests.
 
 ## Current limitations
 
@@ -134,3 +169,9 @@ The revision tests cover arithmetic (including negative and zero old values), pe
 - Display-rounded old/new values can legitimately disagree with a source-stated percentage. These rows are retained with a reconciliation warning.
 - Boxes extending outside a PDF page are clipped to the page boundary; degenerate boxes are omitted.
 - Block IDs are stable for unchanged PDF bytes with the supported PyMuPDF extraction behavior. Replacing a PDF or changing parser behavior intentionally invalidates references.
+- Candidate passage selection is capped at 24 blocks and 12,000 extracted characters. A single oversized first block may be truncated in the model payload while retaining its source block ID.
+- Deterministic context signals are retrieval hints, not final classifications; the validated model output still needs direct supporting evidence.
+- The lexical validator is intentionally conservative and can remove a well-supported paraphrase when it shares too little terminology with the cited passage.
+- Inferred drivers require explicit hedging and causal wording in one cited sentence; genuinely implicit broker reasoning can therefore be omitted and marked unclear.
+- Jargon definitions are retained only for a small deterministic glossary or when the report explicitly defines the term. Unsupported house-specific expansions are removed.
+- Real-report semantic accuracy requires a configured local model and manual claim review. The checked-in evaluation records bounded retrieval results but does not claim model accuracy without such a run.

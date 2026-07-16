@@ -119,3 +119,43 @@ The real-report regression file stores only broker, filename, expected status, a
 The 11-report CLI review found three material issues and fixed them without adding a dependency or broker-specific branch: abbreviated accounting qualifiers were not consistently preserved, a safe same-page consensus table was left unlinked, and disclosure-only pages could be classified as unresolved candidates. Qualifier normalization now covers common abbreviated forms, consensus joining follows the exact policy above, and generic legal/research-disclosure phrases are excluded before candidate scoring.
 
 The review distinguishes automated validation from manual field verification. All 178 emitted rows are repeatable and all 493 referenced block IDs resolve to their source pages; a representative 32-row sample across all six revision-bearing reports was manually checked for metric/qualifier, period, unit, row linkage, arithmetic representation, null handling, and source passage. Dense nested and wrapped table rows remain conservative omissions rather than inferred output.
+
+## 2026-07-16 - Bounded rationale and report-context extraction
+
+### Deterministic passage boundary
+
+Rationale extraction consumes the one `EvidenceDocument` already selected by deterministic retrieval and the corresponding deterministic `RevisionResult`. Revision evidence blocks are mandatory anchors. The selector adds at most two same-page neighbors on either side, signal-bearing passages, nearby-page passages containing revised metrics, opening-page context, and the first blocks of an explicitly cross-referenced page. Disclosure noise is excluded before signal scoring.
+
+The final model input is capped at 24 blocks and 12,000 extracted characters. Revision rows are grouped into metric/direction/period summaries instead of sending all numeric rows. The result records exact input block and character counts. `--no-model` exercises this complete selection path and returns the candidate passages while marking interpretation as skipped.
+
+Alternative considered: give the model the whole PDF or all extracted text. Rejected because it would enlarge the confidentiality surface, weaken single-report claim auditing, and make failures harder to reproduce.
+
+### Provider boundary and confidentiality
+
+`RationaleModel` is the provider protocol. `DeterministicFakeRationaleModel` supports repeatable unit tests. The configured implementation uses an OpenAI-compatible chat-completions envelope but accepts only loopback HTTP(S) endpoints. Its key, URL, and model name come from environment variables; there is no hard-coded key or `.env` loader. A missing key is an explicit configuration error, and a non-loopback URL is rejected before any request is made.
+
+Alternative considered: enable a general external API provider. Rejected because repository policy prohibits sending report contents to an external service. This means real-report semantic evaluation requires a user-configured local model; absence of one is recorded as an evaluation limitation rather than bypassed.
+
+### Structured prompt and validation
+
+The system prompt allows interpretation and plain-English compression only. It forbids external knowledge, proximity-only causation, invented events/people/roles/periods/metrics/numbers/block IDs, and citation URL generation. Output is a single schema-shaped object containing clarity, drivers, why-now, context, management interaction, people met, takeaway, jargon, first-read items, and warnings.
+
+Python validates every cited ID against both the selected document and the bounded passage set. It removes unsupported claims and numbers, unknown periods and metrics, people whose names do not appear in evidence, and ungrounded context. It downgrades `explicit` causal links when the passage lacks direct causal language and changes a revision-bearing result to `unclear` when no validated driver remains. Malformed model output returns `model_error` with an explicit warning and no fallback prose.
+
+Alternative considered: add a second model verification pass immediately. Rejected for this milestone because deterministic validation already enforces evidence identity, lexical/numeric support, enum/schema correctness, and causal-language gates. A second bounded verifier can be added later if local-model evaluation shows materially unsupported claims surviving these checks.
+
+### Context and management signals
+
+Context patterns identify results previews/reviews, roadshows, management meetings, initiations, reiterations, rating changes, and event reactions. They are hints supplied to the model, not authoritative classifications. Management interaction requires explicit meeting/roadshow/hosted language near management, CEO, CFO, chief-officer, or investor-relations wording. Names and roles remain model-interpreted but must resolve literally to cited selected passages.
+
+The initial Windows CLI corpus sweep exposed non-CP1252 symbols in candidate passages. Standard streams are now reconfigured to UTF-8 when supported, preserving valid JSON without changing source text or writing artifacts.
+
+### Adversarial review hardening
+
+The release-gate review found that the initial boundary checks were necessary but not sufficient. A caller could supply a `RevisionResult` from another document, an unexpected provider exception could escape the safe result path, extra schema fields were ignored, model confidence had no deterministic meaning, and a nearby fact could survive when its block also contained unrelated causal wording. Dense revision evidence could also crowd a results-preview block out of the 24-block budget.
+
+The extractor now rejects cross-document revision data before building a payload. Top-level and nested claim schemas are exact and length/count bounded; invalid provider warnings are filtered to short machine-readable codes. All provider and validation failures return a sanitized `model_error`. The first occurrence of each direct context category receives deterministic selection priority, which preserved results-preview evidence in the dense real-corpus case without increasing the block or character caps.
+
+Driver validation is sentence-scoped. `explicit` requires direct causal wording plus sufficient driver-term support in the same cited sentence. `inferred` requires explicit hedged causal wording, not simple adjacency. Proximity-only output is removed. A `valuation only` driver is accepted only for target-price linkage and cannot explain an earnings metric. Management participants require both literal name evidence and an explicit interaction in the cited block; role-specific words must resolve. Jargon definitions are limited to a small deterministic standard glossary or an explicit source definition.
+
+Confidence is recalculated by Python. A high-confidence driver has direct causal support and supported metric/period linkage; medium means explicit support is incomplete or the source itself hedges the causal link; low is reserved for minimal surviving linkage. Grounded non-driver claims use deterministic lexical/evidence concentration rather than the model's self-assessment.

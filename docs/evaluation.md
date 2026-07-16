@@ -1,10 +1,10 @@
-# Retrieval, evidence, and revision-candidate evaluation
+# Retrieval, evidence, revision, and bounded-rationale evaluation
 
 Evaluation date: 2026-07-16
 
 ## Scope
 
-This evaluation covers deterministic report retrieval, the PDF evidence layer, and deterministic estimate-revision candidate extraction. Final brief generation, rationale interpretation, claim selection/highlighting, charts, and email drafting remain out of scope. No LLM or external service is used.
+This evaluation covers deterministic report retrieval, the PDF evidence layer, deterministic estimate-revision extraction, bounded rationale-passage retrieval, the rationale model boundary, and post-model grounding validation. Final brief rendering, citation highlighting, charts, and email drafting remain out of scope. No external service is used.
 
 The evaluation dataset contains query metadata and expected local filenames only. This document contains no report text, extracted passages, analyst contact data, report screenshots, or PDF-derived artifacts.
 
@@ -21,6 +21,8 @@ Original retrieval milestone result: **21 tests passed; 0 failed; 0 skipped.**
 Pre-commit evidence-layer review result: **28 tests passed; 0 failed; 0 skipped.**
 
 Revision-candidate pre-commit review result: **41 tests passed; 0 failed; 0 skipped.**
+
+Bounded-rationale adversarial-review result: **60 tests passed; 0 failed; 0 skipped.**
 
 Coverage includes:
 
@@ -48,6 +50,85 @@ Revision coverage additionally includes:
 - unit mismatch, rounded-value mismatch, conflicting-source, `NA`, `n.m.`, and `ns` behavior;
 - stable page/block evidence resolution and repeatable JSON; and
 - direct-path plus locator-backed `revisions` CLI integration.
+
+Rationale coverage additionally includes:
+
+- revision-anchored candidate passages, adjacency, nearby-page signals, opening context, and deterministic size bounds;
+- results preview/review, roadshow, management meeting, initiation, reiteration, rating change, and event-reaction signals;
+- explicit names and roles for management participants;
+- valid, invented, and unselected evidence block references;
+- clear, partial, and unclear rationale outcomes;
+- revisions with no explanation and reports with no estimate revisions;
+- unsupported drivers, metrics, fiscal periods, numbers, context, management contact, people, and takeaways;
+- malformed model JSON, missing schema fields, missing API configuration, and loopback-only provider configuration;
+- deterministic fake-model behavior and repeatable structured output;
+- UTF-8 CLI output on Windows; and
+- fifteen local reports with repeatable inputs bounded to 24 blocks and 12,000 characters.
+
+## Bounded-rationale evaluation
+
+### Real-report passage retrieval
+
+The `rationale --no-model` path was run on the eleven locator-backed, manually reviewed retrieval cases plus four direct-path context cases: a DNB Carnegie results preview, an ABG results review, and Goldman Sachs roadshow and management-meeting notes. This covers explicit revisions, unresolved revision signals, no revisions, results preview/review, rating change, roadshow, management interaction, and absent deterministic context signals. The locator-backed sample selected the expected PDF in 11/11 cases. No candidate passage, model prompt, coordinate, screenshot, person, or report-derived value was persisted.
+
+| Measure | Result |
+| --- | ---: |
+| Reports evaluated in retrieval-only mode | 15 |
+| Brokers/layout families represented | 13 |
+| Locator-backed expected reports selected | 11 / 11 |
+| Minimum / maximum selected blocks | 15 / 24 |
+| Average selected blocks | 22.9 |
+| Minimum / maximum passage characters | 3,337 / 11,998 |
+| Average passage characters | 8,693.9 |
+| Estimated total prompt + payload characters, min / max | 7,157 / 17,287 |
+| Estimated total prompt + payload characters, average | 13,230.3 |
+| Inputs exceeding configured bounds | 0 |
+| Repeated inputs differing | 0 |
+| Candidate block IDs/pages/text checked against source | 344 |
+| Invalid IDs, page mismatches, text mismatches, or duplicates | 0 |
+| Direct context scenarios retained in the bounded set | 5 / 5 |
+
+The largest estimated input was 17,287 characters including the fixed prompt, revision summary, enums, JSON structure, and 11,923 passage characters. This is roughly a few thousand tokens and was not flagged as unexpectedly large. The original eleven reports comprise six `revisions_found`, three `candidates_unresolved`, and two `no_revisions`; the four context cases add one preview with revisions, one unresolved results review, one no-revision roadshow, and one unresolved management-meeting note.
+
+### Semantic and validation findings
+
+No local rationale model endpoint or API key was configured during this run. Repository policy prohibits sending report passages to an external API, so real-report semantic generation was not performed. Consequently, no model-generated real-report claim exists to review, and the following requested accuracy measures are intentionally recorded as not measured rather than estimated:
+
+| Requested measure | Result |
+| --- | --- |
+| Real-report rationale clarity distribution | Not measured - no local model configured |
+| Explicit real-report drivers correctly identified | Not measured - no local model configured |
+| Unsupported real-report drivers before validation | Not measured - no local model configured |
+| Unsupported real-report drivers remaining after validation | Not measured - no local model configured |
+| Correct real-report context classifications | Not measured - deterministic signals are retrieval hints only |
+| Incorrect real-report context classifications | Not measured - deterministic signals are retrieval hints only |
+| Real-report management-interaction extraction accuracy | Not measured - passage retrieval passed 1/1 management sample |
+
+| Additional requested metric | Synthetic/manual validation result |
+| --- | --- |
+| Rationale clarity distribution | 4 clear / 1 partial / 4 unclear across 9 schema-valid synthetic cases |
+| Manually checked driver claims | 6 synthetic claims |
+| Correctly supported driver claims | 2 direct explicit claims retained |
+| Partially supported driver claims | 1 source-hedged inferred claim retained |
+| Unsupported claims produced before validation | 3 drivers: invented evidence, proximity-only fact, valuation-as-earnings rationale |
+| Unsupported claims remaining after validation | 0 |
+| Report-context classification accuracy | 1 / 1 validated synthetic output; 5 / 5 real context signals retrieved, not semantically classified |
+| Management-interaction extraction accuracy | 2 / 2 synthetic contacts; invented role removed |
+| False-positive causal drivers after validation | 0 / 6 checked driver proposals |
+| Missed material drivers | 0 in the constructed synthetic cases; not measured on real reports |
+| Model parsing/provider failures | 3 injected / 3 failed safely with no extraction |
+| Known unsupported layouts or report types | Real semantic accuracy not measured; split rationale/table layouts and implicit-causality notes remain unsupported release risks |
+
+The synthetic figures above were manually checked against their committed non-proprietary source sentences as well as asserted automatically. They prove validation behavior, not real-corpus semantic accuracy. The adversarial cases specifically show that an invented block, a nearby but unlinked fact, an earnings claim based only on valuation/rating evidence, an incorrect management role, and an incorrect EPS definition do not survive unchanged.
+
+Known failure cases and conservative behavior:
+
+- a supported paraphrase can be removed when it has insufficient lexical overlap with its evidence;
+- a direct causal link expressed without one of the bounded causal patterns is removed unless the source contains explicit hedged causal language;
+- deterministic context patterns can retrieve multiple plausible hints and do not choose the authoritative context;
+- management names and roles must appear literally in selected passages, so split-layout identity text can be omitted;
+- the 24-block/12,000-character cap can omit a relevant distant passage, though direct context categories now receive reserved priority; and
+- real-model accuracy and manual claim review remain a release gate requiring a configured local endpoint.
 
 ## Estimate-revision corpus evaluation
 

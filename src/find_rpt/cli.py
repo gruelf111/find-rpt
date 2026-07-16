@@ -8,6 +8,7 @@ from pathlib import Path
 from .evidence import EvidenceDocument, EvidenceError, PdfEvidenceExtractor
 from .retrieval import Candidate, RetrievalEngine, RetrievalResult
 from .revisions import RevisionExtractor
+from .rationale import ModelConfigurationError, RationaleExtractor
 
 
 def _candidate_lines(candidate: Candidate) -> list[str]:
@@ -72,6 +73,19 @@ def build_parser() -> argparse.ArgumentParser:
     revisions.add_argument("--corpus", type=Path, default=Path("corpus"))
     revisions.add_argument("--pages", help="one-based pages, e.g. 1-3,5")
     revisions.add_argument("--format", choices=("json",), default="json")
+
+    rationale = subparsers.add_parser(
+        "rationale", help="retrieve bounded passages and extract grounded rationale"
+    )
+    source = rationale.add_mutually_exclusive_group(required=True)
+    source.add_argument("--pdf-path", type=Path)
+    source.add_argument("--ticker", help="Bloomberg ticker")
+    rationale.add_argument("--date", help="required with --ticker")
+    rationale.add_argument("--broker", help="required with --ticker")
+    rationale.add_argument("--corpus", type=Path, default=Path("corpus"))
+    rationale.add_argument("--pages", help="one-based pages, e.g. 1-3,5")
+    rationale.add_argument("--no-model", action="store_true", help="return candidate passages only")
+    rationale.add_argument("--format", choices=("json",), default="json")
     return parser
 
 
@@ -164,10 +178,36 @@ def _run_revisions(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_rationale(args: argparse.Namespace) -> int:
+    retrieval, document, code = _resolve_document(args)
+    if code:
+        return code
+    revisions = RevisionExtractor().extract(document, broker=args.broker)
+    try:
+        result = RationaleExtractor().extract(
+            document,
+            revisions=revisions,
+            no_model=args.no_model,
+            broker=args.broker,
+        )
+    except ModelConfigurationError as error:
+        print(json.dumps({"error": type(error).__name__, "message": str(error)}), file=sys.stderr)
+        return 1
+    payload = result.to_dict()
+    if retrieval is not None:
+        payload = {"retrieval": retrieval.to_dict(), "rationale": payload}
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0 if result.status != "model_error" else 1
+
+
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
     argv = list(sys.argv[1:] if argv is None else argv)
     # Preserve the original positional retrieval interface while documenting `find`.
-    if argv and argv[0] not in {"find", "evidence", "revisions", "-h", "--help"}:
+    if argv and argv[0] not in {"find", "evidence", "revisions", "rationale", "-h", "--help"}:
         argv.insert(0, "find")
     args = build_parser().parse_args(argv)
     if args.command == "find":
@@ -176,6 +216,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_evidence(args)
     if args.command == "revisions":
         return _run_revisions(args)
+    if args.command == "rationale":
+        return _run_rationale(args)
     build_parser().print_help()
     return 1
 
