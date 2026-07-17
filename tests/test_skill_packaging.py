@@ -10,7 +10,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = ROOT / "skills" / "find-rpt" / "scripts" / "find_rpt.py"
+SKILL_ROOT = ROOT / ".agents" / "skills" / "find-rpt"
+LAUNCHER = SKILL_ROOT / "scripts" / "find_rpt.py"
 SPEC = importlib.util.spec_from_file_location("find_rpt_skill_launcher", LAUNCHER)
 assert SPEC and SPEC.loader
 launcher = importlib.util.module_from_spec(SPEC)
@@ -254,8 +255,18 @@ class LauncherIntegrationTests(unittest.TestCase):
 
 
 class PackagingFilesTests(unittest.TestCase):
+    def test_repository_local_codex_skill_exists(self):
+        self.assertTrue((SKILL_ROOT / "SKILL.md").is_file())
+        self.assertTrue((SKILL_ROOT / "scripts" / "find_rpt.py").is_file())
+        self.assertTrue((SKILL_ROOT / "references" / "output-contract.md").is_file())
+        legacy_root = ROOT / "skills" / "find-rpt"
+        legacy_sources = {".md", ".py", ".yaml", ".yml", ".toml"}
+        self.assertFalse(
+            any(path.is_file() and path.suffix.casefold() in legacy_sources for path in legacy_root.rglob("*"))
+        )
+
     def test_codex_and_optional_claude_wrappers_are_thin(self):
-        skill = (ROOT / "skills" / "find-rpt" / "SKILL.md").read_text(encoding="utf-8")
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         claude = (ROOT / ".claude" / "commands" / "find-rpt.md").read_text(encoding="utf-8")
         launcher_text = LAUNCHER.read_text(encoding="utf-8")
         self.assertIn("python -m find_rpt", skill)
@@ -263,12 +274,12 @@ class PackagingFilesTests(unittest.TestCase):
         self.assertIn("agent finalize", skill)
         self.assertIn("--input -", skill)
         self.assertNotIn("python skills/find-rpt/scripts/find_rpt.py", skill)
-        self.assertIn("skills/find-rpt/scripts/find_rpt.py", claude)
+        self.assertIn(".agents/skills/find-rpt/scripts/find_rpt.py", claude)
         for forbidden in ("PdfEvidenceExtractor", "RevisionExtractor", "RationaleExtractor", "CitationBuilder"):
             self.assertNotIn(forbidden, launcher_text)
 
     def test_skill_files_have_no_machine_specific_absolute_paths(self):
-        for path in (ROOT / "skills" / "find-rpt").rglob("*"):
+        for path in SKILL_ROOT.rglob("*"):
             if path.is_file() and path.suffix in {".md", ".py", ".yaml", ".toml"}:
                 text = path.read_text(encoding="utf-8")
                 without_urls = text.replace("http://", "").replace("https://", "")

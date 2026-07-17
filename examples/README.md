@@ -3,7 +3,7 @@
 Committed examples are synthetic and contain no report-derived text. Generate real-corpus output only into an ignored local directory, never commit it, and delete it after review.
 
 ```text
-python skills/find-rpt/scripts/find_rpt.py --command '/find-rpt BP/ LN 22 Jun 2026 "J.P. Morgan"' > .cache/local-example.json
+python .agents/skills/find-rpt/scripts/find_rpt.py --command '/find-rpt BP/ LN 22 Jun 2026 "J.P. Morgan"' > .cache/local-example.json
 python scripts/redact_example.py .cache/local-example.json .cache/redacted-example.json
 ```
 

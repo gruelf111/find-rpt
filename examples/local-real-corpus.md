@@ -3,7 +3,7 @@
 Real-report output may contain proprietary text and analyst contact details. Keep it in the ignored `.cache/` directory, review it locally, and do not commit or redistribute it.
 
 ```powershell
-python skills/find-rpt/scripts/find_rpt.py --command '/find-rpt TICKER EXCHANGE YYYY-MM-DD "Broker Name"' > .cache/local-example.json
+python .agents/skills/find-rpt/scripts/find_rpt.py --command '/find-rpt TICKER EXCHANGE YYYY-MM-DD "Broker Name"' > .cache/local-example.json
 python scripts/redact_example.py .cache/local-example.json .cache/redacted-example.json
 ```
 

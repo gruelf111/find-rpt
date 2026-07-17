@@ -348,7 +348,7 @@ Raw command parsing identifies exactly one supported date between ticker and bro
 
 Precedence is launcher options, environment, ignored `find-rpt.toml`, then safe defaults. Configuration covers corpus/cache, local model provider/name/URL/key-variable name, citation host/port, and no-model mode. Only a loopback OpenAI-compatible provider or no model is accepted. `.env.example` is documentation only.
 
-Codex is primary through `skills/find-rpt/`. The optional Claude project command passes `$ARGUMENTS` to the same launcher and contract. Synthetic examples, a conservative redaction helper, and the safe smoke test remain outside the skill bundle to keep it compact.
+Codex is primary through `.agents/skills/find-rpt/`. The optional Claude project command passes `$ARGUMENTS` to the same launcher and contract. Synthetic examples, a conservative redaction helper, and the safe smoke test remain outside the skill bundle to keep it compact.
 
 ### Final packaging-review hardening
 

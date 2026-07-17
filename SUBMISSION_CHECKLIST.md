@@ -6,7 +6,7 @@ Status vocabulary: **Complete**, **Incomplete**, **Not applicable**, or **Manual
 
 | Item | Status | Evidence or remaining action |
 | --- | --- | --- |
-| `/find-rpt {ticker} {date} {broker}` is packaged as a thin Codex skill | Complete | `skills/find-rpt/`; official skill validator passed. |
+| `/find-rpt {ticker} {date} {broker}` is packaged as a thin Codex skill | Complete | `.agents/skills/find-rpt/`; official skill validator passed. |
 | Python remains the authoritative pipeline | Complete | The launcher calls `python -m find_rpt brief --format agent-json`; extraction logic is not duplicated. |
 | README covers installation, configuration, usage, limitations, tests, privacy, and cleanup | Complete | `README.md`. |
 | Safe complete, escalation, and not-found examples are included | Complete | `examples/`. |

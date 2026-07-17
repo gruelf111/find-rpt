@@ -162,3 +162,10 @@
 - The packaged launcher selected the expected authorized sample in explicit no-model mode, preserved ten citations, returned transparent `partial` status, and retained `sent: false`. Synthetic grounding tests continued to leave zero unsupported causal claims after validation; real no-model output emitted no causal prose.
 - Repeated current-tree and branch/tag-history scans found no tracked PDF, proprietary report passage, real analyst contact, generated real-report output, actual environment file, credential, high-confidence secret pattern, or send-capable mechanism. The safe `.env.example`, loopback URLs, and explicit no-send instructions were the only relevant expected configuration matches.
 - The 174-source name/size/content manifest remained `51e92ef78c17cbf63f015e78745e0e960a1f791fefa8f1aab4b346b201de3bec`. The temporary release environment, build output, bytecode, and egg metadata were removed before staging.
+
+## 2026-07-18 - Canonical skill-packaging cleanup
+
+- Confirmed that `.agents/skills/find-rpt` is the tracked canonical Codex skill. The legacy launcher, UI metadata, and output contract were byte-identical; the canonical `SKILL.md` retained the same workflow and additionally documented the `$find-rpt` activation form. Removing `skills/find-rpt` therefore removed no unique business logic.
+- Updated active Claude, smoke-test, example, checklist, decision, and packaging-test references to `.agents/skills/find-rpt`. Retained the earlier `skills/find-rpt` development-log entry as historical context.
+- Focused packaging tests passed 18/18 with 3 subtests, and the complete suite passed 168/168 with 111 subtests. No separate lint or static-type command is configured; compilation was used as the documented syntax check.
+- The cleanup safety scan found no changed PDF or corpus source, proprietary report text, generated real-report output, environment file, secret, analyst contact, or send-capable email mechanism.

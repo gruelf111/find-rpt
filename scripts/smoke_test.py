@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = ROOT / "skills" / "find-rpt" / "scripts" / "find_rpt.py"
+LAUNCHER = ROOT / ".agents" / "skills" / "find-rpt" / "scripts" / "find_rpt.py"
 
 
 def main() -> int:
@@ -46,7 +46,7 @@ def main() -> int:
 
     spec = importlib.util.spec_from_file_location("find_rpt_smoke_launcher", LAUNCHER)
     if not spec or not spec.loader:
-        checks.append({"check": "skill_launcher", "ok": False, "action": "restore skills/find-rpt"})
+        checks.append({"check": "skill_launcher", "ok": False, "action": "restore .agents/skills/find-rpt"})
         settings = None
     else:
         module = importlib.util.module_from_spec(spec)
