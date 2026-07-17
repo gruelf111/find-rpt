@@ -250,7 +250,7 @@ class RevisionExtractionTests(unittest.TestCase):
 
 
 class RealReportRevisionEvaluationTests(unittest.TestCase):
-    def test_eleven_real_reports_are_repeatable_and_evidence_resolves(self) -> None:
+    def test_real_reports_are_repeatable_and_evidence_resolves(self) -> None:
         corpus = Path("corpus")
         cases_path = Path("tests/revision_evaluation_cases.json")
         if not corpus.is_dir():

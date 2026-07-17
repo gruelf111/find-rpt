@@ -9,5 +9,6 @@
   {"broker": "Jefferies", "filename": "20260511_Jefferies_0c66e347fc5b6d6b413d523f33f0f7c2.pdf", "expected_status": "no_revisions", "expected_revision_count": 0},
   {"broker": "KBC Securities", "filename": "20260511_KBC Securities_983612ba9e74731e074484836c14e498.pdf", "expected_status": "no_revisions", "expected_revision_count": 0},
   {"broker": "Stifel Nicolaus", "filename": "20260511_Stifel Nicolaus_167783c6253b21dd0f9765cc96b64254.pdf", "expected_status": "revisions_found", "expected_revision_count": 2},
-  {"broker": "Kepler Cheuvreux", "filename": "20260622_Kepler Cheuvreux_098dda895ab76d9a8e9b4c3a3408485a.pdf", "expected_status": "revisions_found", "expected_revision_count": 7}
+  {"broker": "Kepler Cheuvreux", "filename": "20260622_Kepler Cheuvreux_098dda895ab76d9a8e9b4c3a3408485a.pdf", "expected_status": "revisions_found", "expected_revision_count": 7},
+  {"broker": "Oddo BHF Corporates & Markets", "filename": "20260528_Oddo BHF Corporates & Markets_006dbc91878c159a9e076cf466e43fae.pdf", "expected_status": "candidates_unresolved", "expected_revision_count": 0}
 ]

@@ -26,8 +26,16 @@ GENERIC_NAME_LINE_RE = re.compile(
     re.I,
 )
 TITLE_EXCLUSION_RE = re.compile(
-    r"\b(?:bloomberg|reuters|analysts?|research team|target price|price target|"
-    r"rating|telephone|phone|email|disclosures?|contents|page \d+|www\.)\b|@",
+    r"\b(?:bloomberg|reuters|analysts?|research|target price|price target|"
+    r"rating|telephone|phone|email|disclosures?|contents|page \d+|www\.|"
+    r"equity research|company research|first reaction note|first take|company update|"
+    r"this insert is part of|sector report)\b|\b(?:sector|price)\s*:|@",
+    re.I,
+)
+SHORT_RATING_LINE_RE = re.compile(
+    r"^(?:[A-Za-z0-9.&'’\-]+\s+){0,3}"
+    r"(?:buy|hold|sell|overweight|underweight|neutral|outperform|underperform)"
+    r"(?:\s*\([^)]{1,20}\))?$",
     re.I,
 )
 NAME_RE = re.compile(
@@ -36,7 +44,8 @@ NAME_RE = re.compile(
 )
 CONTACT_NAME_RE = re.compile(
     r"^(?P<name>(?:[A-Z][A-Za-z'’\-]+\s+){1,3}[A-Z][A-Za-z'’\-]+)"
-    r"(?:,?\s*(?P<designation>CFA|ACA|CPA|CA|PhD))?(?=\s*(?:[|:>•]|\+?\d|$))"
+    r"(?:,?\s*(?P<designation>CFA|ACA|CPA|CA|PhD))?"
+    r"(?=\s*(?:[*†‡]\s*)?(?:[|:>•(]|\+?\d|$))"
 )
 DATE_LINE_RE = re.compile(
     r"^(?:publication date|published|date)?\s*:?[ \t]*"
@@ -89,7 +98,11 @@ def _title_score(line: str, *, y: float, height: float, line_height: float) -> f
     words = re.findall(r"[A-Za-z][A-Za-z0-9&'\-/]*", line)
     if not 3 <= len(words) <= 24:
         return -1
-    if not 12 <= len(line) <= 220 or TITLE_EXCLUSION_RE.search(line):
+    if (
+        not 12 <= len(line) <= 220
+        or TITLE_EXCLUSION_RE.search(line)
+        or SHORT_RATING_LINE_RE.fullmatch(line)
+    ):
         return -1
     if sum(character.isalpha() for character in line) / max(1, len(line)) < 0.55:
         return -1
@@ -136,15 +149,24 @@ class ReportMetadataExtractor:
                 continue
             lines = [_clean_line(line) for line in block.text.splitlines() if _clean_line(line)]
             line_height = (block.bbox[3] - block.bbox[1]) / max(1, len(lines))
-            for line in lines:
-                score = _title_score(
-                    line,
-                    y=block.bbox[1],
-                    height=page.height,
-                    line_height=line_height,
-                )
-                if score >= 0:
-                    candidates.append((score, -order, line, block.block_id))
+            for start in range(len(lines)):
+                for length in range(1, min(3, len(lines) - start) + 1):
+                    if length > 1 and any(
+                        len(re.findall(r"[A-Za-z0-9]+", part)) < 2
+                        for part in lines[start : start + length]
+                    ):
+                        continue
+                    line = " ".join(lines[start : start + length])
+                    score = _title_score(
+                        line,
+                        y=block.bbox[1],
+                        height=page.height,
+                        line_height=line_height,
+                    )
+                    if score >= 0:
+                        candidates.append(
+                            (score + 6.0 * (length - 1), -order, line, block.block_id)
+                        )
         candidates.sort(reverse=True)
         title = candidates[0][2] if candidates else None
         title_ids = (candidates[0][3],) if candidates else ()
@@ -177,7 +199,7 @@ class ReportMetadataExtractor:
                     name_match = NAME_RE.fullmatch(line) or CONTACT_NAME_RE.match(line)
                     if (
                         name_match is None
-                        or ROLE_RE.search(line)
+                        or ROLE_RE.search(name_match.group("name"))
                         or GENERIC_NAME_LINE_RE.fullmatch(name_match.group("name"))
                         or not _plausible_person_name(name_match.group("name"))
                     ):
@@ -263,11 +285,11 @@ class ReportMetadataExtractor:
                         same_line_email or block_email_lines or block_role_lines
                     )
                     explicit_contact_context = bool(
-                        (email and strong_contact_link)
-                        or (
+                        (
                             evidence_page.page_number == 1
                             and (
-                                (role and bool(block_role_lines))
+                                (email and strong_contact_link)
+                                or (role and bool(block_role_lines))
                                 or (
                                     strong_contact_link
                                     and re.search(r"\b(?:analysts?|research team|byline|author)\b", nearby_text, re.I)

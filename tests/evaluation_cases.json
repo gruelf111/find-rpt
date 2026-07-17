@@ -64,5 +64,11 @@
     "date": "20260622",
     "broker": "Kepler Cheuvreux",
     "expected_filename": "20260622_Kepler Cheuvreux_098dda895ab76d9a8e9b4c3a3408485a.pdf"
+  },
+  {
+    "ticker": "SOI FP",
+    "date": "2026-05-28",
+    "broker": "Oddo BHF Corporates & Markets",
+    "expected_filename": "20260528_Oddo BHF Corporates & Markets_006dbc91878c159a9e076cf466e43fae.pdf"
   }
 ]

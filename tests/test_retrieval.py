@@ -87,6 +87,22 @@ class RetrievalTests(unittest.TestCase):
         self.assertEqual(result.status, "found")
         self.assertEqual(result.match.evidence[0].kind, "explicit_bloomberg_field")
 
+    def test_compact_ticker_in_delimited_identifier_row_is_supported(self) -> None:
+        match = self.add_file("Broker", "a" * 32)
+        result = RetrievalEngine(
+            self.corpus, FakeInspector({match: ["Company\nSOIFP|SOIT.PA"]})
+        ).retrieve("SOI FP", "20260102", "Broker")
+        self.assertEqual(result.status, "found")
+        self.assertEqual(result.match.filename, match)
+        self.assertEqual(result.match.evidence[0].kind, "header_or_title")
+
+    def test_compact_ticker_is_not_matched_in_ordinary_prose(self) -> None:
+        only = self.add_file("Broker", "a" * 32)
+        result = RetrievalEngine(
+            self.corpus, FakeInspector({only: ["MARGIN improved in the quarter"]})
+        ).retrieve("MAR IN", "20260102", "Broker")
+        self.assertEqual(result.status, "not_found")
+
     def test_narrative_bloomberg_mention_is_not_an_explicit_field(self) -> None:
         only = self.add_file("Broker", "a" * 32)
         text = "heading\n" + "detail\n" * 28 + "According to Bloomberg data, peer ABC LN moved"

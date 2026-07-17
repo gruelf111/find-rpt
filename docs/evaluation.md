@@ -1,10 +1,12 @@
 # Retrieval, evidence, revision, bounded-rationale, citation, brief, and escalation evaluation
 
-Evaluation date: 2026-07-16
+Evaluation dates: 2026-07-16 through 2026-07-17
 
 ## Scope
 
-This evaluation covers deterministic report retrieval, the PDF evidence layer, deterministic estimate-revision extraction, bounded rationale-passage retrieval, the rationale model boundary, post-model grounding validation, precise local citation highlighting, final structured brief rendering, and review-only analyst escalation. Skill packaging remains out of scope. No external service is used.
+This evaluation covers deterministic report retrieval, the PDF evidence layer, deterministic estimate-revision extraction, bounded rationale-passage retrieval, the rationale model boundary, post-model grounding validation, precise local citation highlighting, final structured brief rendering, review-only analyst escalation, and skill packaging. No external report-processing service is used.
+
+Sections before "Final end-to-end evaluation" preserve milestone results at their then-current sample sizes. They are historical verification records, not the final aggregate. The final section and acceptance recheck supersede them for release review. Automated results, manual PDF checks, calculated metrics, qualitative judgments, and unavailable real-model measures are labelled separately.
 
 The evaluation dataset contains query metadata and expected local filenames only. This document contains no report text, extracted passages, analyst contact data, report screenshots, or PDF-derived artifacts.
 
@@ -442,3 +444,63 @@ The full synthetic/core matrix covers a complete brief, partial brief, no revisi
 The review found and fixed four packaging defects: repository-relative installed-skill instructions, an installer that assumed `CODEX_HOME` was set, absolute paths in low-level configuration failures, and a no-send smoke scan limited to `src/`. Actual execution then exposed a fifth defect: Unicode visualization bars could fail at the Windows CP-1252 console boundary. ASCII-safe JSON transport now preserves the parsed Unicode Markdown and has regression coverage.
 
 Final gates passed 143/143 tests, including 17 focused packaging tests; Python compilation; dependency consistency; Codex skill validation; all seven smoke checks in explicit no-model mode; editable clean installation with declared dependencies; copied-skill discovery/execution outside the repository; actual Codex launcher invocations; and optional Claude wrapper inspection. Ruff, mypy, or another lint/type-check command is not configured, so no separate lint or static-type result exists.
+
+## Final end-to-end evaluation (2026-07-17)
+
+This evaluation used the packaged launcher and 12 manually audited real reports selected deterministically across multiple brokers and layouts. Only aggregate results are recorded. Report text, real titles, contacts, filenames, screenshots, generated briefs, and citation artifacts were not persisted in submission files.
+
+### Retrieval, revisions, and brief shape
+
+All 12 queries selected exactly the expected single report. A deliberately nonexistent ticker returned `not_found`; no query broadened into a guess or ambiguity. The status mix was six `revisions_found`, four `candidates_unresolved`, and two `no_revisions`. The extractor emitted 178 rows; a stratified manual sample of 32 was correct in 32/32 cases. All 493 referenced source blocks resolved. Of 98 comparable arithmetic rows, 79 were within the configured tolerance and 19 were transparently flagged as display-rounding discrepancies. At least 45 rows were conservatively missed, plus unknown rows in unresolved layouts; this is the principal deterministic recall limitation. Three exact before/after consensus joins were available.
+
+All 12 page-one titles were manually correct after the final metadata fixes. Analyst extraction produced 16 relevant records and no manually observed false-positive record. The page-one audit estimated 25 visible relevant contacts, so name coverage was approximately 64% (16/25). Fifteen explicit addresses were extracted, all correctly paired; approximately 19 were visibly available, giving about 79% coverage (15/19). These coverage denominators are manual page-one counts, not an automated ground-truth corpus.
+
+The no-model packaged briefs contained 34 concise revision rows and 207 citations. After removing citation URLs for reading-time measurement, briefs ranged from 57 to 249 visible words, averaging 118.2; all 12 were judged readable in under one minute. Every real run was intentionally `partial` because no loopback semantic model was configured.
+
+### Citation and rationale review
+
+Eleven manually opened citations, spanning existing multi-layout checks and the new twelfth case, resolved to the correct report and page and highlighted the intended passage. Broad highlights and failed opens were both zero. The last citation was inspected through the live loopback viewer; its page render remained local and was not saved as a submission artifact.
+
+No automated real-model rationale accuracy is claimed. A prior six-report local manual sample assigned five clear and one partial rationale labels and exercised one in-memory partial escalation with two specific unresolved questions. The final page-one audit examined ten additional reports containing candidate revisions; each gave an explicit operational, financial, valuation, or event rationale. It therefore found no defensible real unclear case. Synthetic tests remain the evidence for true unclear-rationale drafting, `[TODO: address]`, stopping behavior, and immutable `sent: false`. A configured local-model review of complete real briefs remains an acceptance gate.
+
+### Defects found and corrected
+
+- Compact tickers are accepted only as exact tokens in delimiter-shaped identifier lines, avoiding prose substring matches.
+- Parenthesized and starred analyst bylines are supported, while later-page disclosure headings are excluded unless explicit analyst-certification evidence exists.
+- Multi-line titles can beat generic research-format headers and rating lines without joining unrelated short headings.
+- The real evaluation manifest now contains 12 retrieval cases, including the additional compact-ticker layout.
+
+The final command results and repository-integrity checks are recorded in the last section of `DEVELOPMENT_LOG.md`. The submission verdict and remaining manual steps are in `SUBMISSION_CHECKLIST.md`.
+
+## Final acceptance recheck (2026-07-17)
+
+| # | Criterion | Status | Evidence and scope |
+| ---: | --- | --- | --- |
+| 1 | Correct report for manual sample | Pass | 12/12 expected single-report selections. |
+| 2 | Unsupported causal claims remaining | Pass, scoped | Zero in exercised synthetic validation; real no-model briefs emitted no causal prose. Real-model accuracy remains unmeasured. |
+| 3 | Material claims cited or unavailable | Pass | Citation-invalid facts are suppressed; semantic fields are explicitly unavailable in no-model mode. |
+| 4 | Deterministic revision arithmetic | Pass | Automated recomputation and positive, negative, zero, units, percentage-point, and reconciliation tests pass. |
+| 5 | Correct report/page/highlight | Pass | 11/11 manually opened citations; live final browser check loaded the page image, evidence anchor, and highlight overlay. |
+| 6 | Transparent ambiguity/not-found | Pass | Synthetic ambiguity, real not-found control, and packaged not-found invocation pass. |
+| 7 | Unclear-rationale draft | Pass, synthetic/manual-label evidence | Package/escalation tests pass; one manually labelled partial case was exercised in memory. No genuine real unclear case was identified. |
+| 8 | No automatic send | Pass | Frozen `sent: false`, source guard, smoke test, and final runtime scan. |
+| 9 | No tracked report PDFs | Pass | Current tree and all Git objects contain zero PDF paths. |
+| 10 | No tracked proprietary text | Pass | Diff/current-tree/history review found no report passage or generated real brief. |
+| 11 | No tracked real contacts | Pass | Current-tree and history domain/name scans found none. |
+| 12 | No tracked secrets or local credentials | Pass | Only documented variable names, placeholders, and synthetic test passwords matched. |
+| 13 | Clean installation | Pass | Fresh Python 3.12 environment installed the package and declared dependencies; `pip check` passed. |
+| 14 | Packaged Codex skill | Pass | Official validator, packaging tests, direct launcher, and copied-skill design checks pass. |
+| 15 | Reproducible README | Pass | Configuration, no-model/local-model paths, viewer, skill, tests, limitations, and cleanup are documented. |
+| 16 | Example runs | Pass | Synthetic complete, not-found, escalation, and combined examples are present. |
+| 17 | Inline-citation example | Pass | Synthetic complete example includes claim-level loopback citation links. |
+| 18 | Ambiguity/not-found example | Pass | `examples/not-found.md`. |
+| 19 | Escalation example | Pass | `examples/escalation.md`. |
+| 20 | Development logs prepared | Pass | Chronological and submission-safe AI-development records plus transcript-export guidance are present. |
+| 21 | Source PDFs unchanged | Pass | The same 174-file name/size/content manifest, `51e92ef78c17cbf63f015e78745e0e960a1f791fefa8f1aab4b346b201de3bec`, was calculated before and after the final run. |
+| 22 | No accidental generated artifact | Pass | No unignored cache, render, database, or real output is present; disposable final-review files were removed. |
+
+### Final reviewer-path findings
+
+The first literal fresh-environment walkthrough exposed two documentation prerequisites: smoke ran before the viewer was started, and the packaging test's no-build-isolation subprocess required `setuptools` in the test environment. `REVIEWER_GUIDE.md` now installs the declared build backend for review and runs smoke after viewer startup. After that correction, all 148 tests passed in the fresh environment, as did compilation, dependency consistency, the seven-check smoke test, the official skill validator, the synthetic escalation checks, and direct packaged invocations.
+
+The packaged real query using an English date and a broker containing spaces returned a cited transparent partial brief with `sent: false`. Punctuation parsing and an explicit nonexistent ticker returned transparent `not_found` results. A complete real semantic brief and a genuine real unclear-rationale packaged result were not run because no loopback rationale model was available and the audited reports did not supply a defensible unclear case. Those are manual semantic acceptance items, not hidden passes.

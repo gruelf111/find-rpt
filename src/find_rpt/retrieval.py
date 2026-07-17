@@ -52,7 +52,22 @@ def _normalized_line(value: str) -> str:
 
 def _contains_ticker(line: str, ticker: str) -> bool:
     normalized = _normalized_line(line)
-    return re.search(rf"(?<![A-Z0-9]){re.escape(ticker)}(?![A-Z0-9])", normalized) is not None
+    if re.search(rf"(?<![A-Z0-9]){re.escape(ticker)}(?![A-Z0-9])", normalized):
+        return True
+
+    # Some embedded PDF text layers collapse a Bloomberg root and exchange suffix
+    # inside a delimited identifier row (for example, ``SOIFP|SOIT.PA``). Accept
+    # only that exact compact token in an identifier-shaped line; matching compact
+    # tokens in ordinary prose would turn common words into false ticker evidence.
+    compact_ticker = ticker.replace(" ", "")
+    compact_line = unicodedata.normalize("NFKD", line).upper()
+    return bool(
+        re.search(r"[,/|():]", compact_line)
+        and re.search(
+            rf"(?<![A-Z0-9]){re.escape(compact_ticker)}(?![A-Z0-9])",
+            compact_line,
+        )
+    )
 
 
 @dataclass(frozen=True)

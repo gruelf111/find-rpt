@@ -439,7 +439,7 @@ class RationaleTests(unittest.TestCase):
 
 
 class RealReportRationaleRetrievalTests(unittest.TestCase):
-    def test_eleven_real_reports_have_repeatable_bounded_model_inputs(self) -> None:
+    def test_real_reports_have_repeatable_bounded_model_inputs(self) -> None:
         corpus = Path("corpus")
         cases_path = Path("tests/revision_evaluation_cases.json")
         if not corpus.is_dir():

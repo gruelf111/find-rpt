@@ -1,12 +1,40 @@
 # find-rpt
 
-This repository implements deterministic retrieval, a PDF evidence layer, conservative estimate-revision extraction, bounded rationale interpretation, precise local citations, a concise research-brief renderer, and review-only ambiguity escalation. Given a Bloomberg ticker, corpus date, and broker, it selects one local PDF, validates estimate revisions, grounds the explanation, builds highlighted loopback citations, and renders Markdown, JSON, or terminal text with an optional compact estimate comparison and analyst clarification draft.
+`find-rpt` is a local-first Codex skill and Python CLI that selects exactly one sell-side research PDF from a private corpus and renders a concise, evidence-backed brief. The query contract is:
 
-It can draft a clarification email when validated material revisions remain unexplained. It cannot send, launch, transmit, or copy that draft. The repository now packages the pipeline as a Codex-first `/find-rpt` skill with an optional Claude Code command; both use the same thin launcher and authoritative Python renderer.
+```text
+/find-rpt {Bloomberg ticker} {corpus date} {broker}
+```
 
-## Clean-machine installation and agent enablement
+The package performs deterministic report selection, revision arithmetic, evidence geometry, citation validation, and escalation gating. A model may interpret only a bounded evidence set from the selected report. It can draft an analyst clarification email when material revisions remain unexplained, but it has no send path.
 
-The supported runtime is Python 3.11 or newer. From a clean checkout, create and activate a virtual environment, then install the local package:
+## Architecture
+
+```text
+/find-rpt request
+  -> deterministic filename/date/broker shortlist
+  -> deterministic ticker resolution (one report or stop)
+  -> local PDF blocks, words, pages, and bounding boxes
+  -> deterministic revisions, arithmetic, units, periods, and citations
+  -> bounded loopback-model interpretation and Python grounding checks
+  -> concise brief or review-only analyst draft
+  -> loopback highlighted citation viewer
+```
+
+This separation matters: a model is useful for plain-English interpretation, but it must not choose files, perform authoritative arithmetic, invent missing values, or create source coordinates. If deterministic evidence cannot establish one report or support a claim, the system returns an explicit partial, not-found, ambiguous, or error result.
+
+## Requirements
+
+- Python 3.11 or newer;
+- a local `corpus/` directory containing the supplied PDFs, or another configured local path;
+- an optional OpenAI-compatible model endpoint on loopback for complete rationale output; and
+- a browser for opening highlighted citations from the loopback viewer.
+
+Runtime dependencies are constrained in `pyproject.toml`: `pypdf>=6,<7` and `PyMuPDF>=1.26,<2`. No database, cloud service, telemetry client, mail library, or web framework is required.
+
+## Install from a clean checkout
+
+PowerShell:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -15,22 +43,28 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-POSIX shells use `python3.11 -m venv .venv`, `source .venv/bin/activate`, and the same `python -m pip` commands. Installation creates the `find-rpt` console command and supports `python -m find_rpt`.
+POSIX shell:
 
-Place source reports under the local `corpus/` directory, or configure another local directory. Never add PDFs to Git. Copy the safe configuration template if desired:
+```sh
+python3.11 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+Installation provides both `find-rpt` and `python -m find_rpt`.
+
+## Corpus and configuration
+
+Put source reports in `corpus/`. PDFs, local configuration, caches, rendered inspection images, and generated real-report output are ignored by Git. The project never modifies a source PDF.
+
+Optional local TOML configuration:
 
 ```powershell
 Copy-Item find-rpt.example.toml find-rpt.toml
 ```
 
-`find-rpt.toml` is ignored. `.env.example` lists the equivalent environment variables, but the project deliberately does not auto-load `.env` files. Set secrets in the shell or local process manager.
-
-Configuration precedence is:
-
-1. launcher CLI options;
-2. environment variables;
-3. `[find_rpt]` in `find-rpt.toml`;
-4. documented defaults.
+Configuration precedence is launcher flags, environment variables, `[find_rpt]` in ignored `find-rpt.toml`, then defaults.
 
 | Setting | Launcher option | Environment | TOML key | Default |
 | --- | --- | --- | --- | --- |
@@ -38,425 +72,192 @@ Configuration precedence is:
 | Citation cache | `--cache-dir` | `FIND_RPT_CACHE_DIR` | `cache_path` | `.cache/find-rpt/citations` |
 | Model provider | `--model-provider` | `FIND_RPT_MODEL_PROVIDER` | `model_provider` | `local-openai-compatible` |
 | Model name | `--model-name` | `FIND_RPT_MODEL_NAME` | `model_name` | `local-rationale-model` |
-| Model URL | `--model-url` | `FIND_RPT_MODEL_URL` | `model_url` | loopback chat-completions URL |
-| API-key variable name | `--model-api-key-env` | `FIND_RPT_MODEL_API_KEY_ENV` | `model_api_key_env` | `FIND_RPT_MODEL_API_KEY` |
+| Model URL | `--model-url` | `FIND_RPT_MODEL_URL` | `model_url` | `http://127.0.0.1:11434/v1/chat/completions` |
+| API-key variable | `--model-api-key-env` | `FIND_RPT_MODEL_API_KEY_ENV` | `model_api_key_env` | `FIND_RPT_MODEL_API_KEY` |
 | Viewer host | `--citation-viewer-host` | `FIND_RPT_CITATION_HOST` | `citation_viewer_host` | `127.0.0.1` |
 | Viewer port | `--citation-viewer-port` | `FIND_RPT_CITATION_PORT` | `citation_viewer_port` | `8765` |
 | No-model mode | `--no-model` | `FIND_RPT_NO_MODEL` | `no_model` | `false` |
 
-Only `local-openai-compatible` and `none` model providers are accepted. Both model and citation-viewer hosts must remain loopback. Provider `none` is equivalent to no-model mode and returns a transparent partial brief.
+`.env.example` documents equivalent variables, but the package does not auto-load `.env` files. `model_provider` accepts only `local-openai-compatible` or `none`; model and citation hosts must resolve to loopback. `none` enables transparent no-model mode.
 
-Start the citation viewer in a separate terminal before using clickable citations:
+## Local model configuration
+
+Point the launcher at an OpenAI-compatible chat-completions endpoint running locally, then set its model name and key in the shell. The key may be a placeholder if the local server does not authenticate.
+
+```powershell
+$env:FIND_RPT_MODEL_URL = 'http://127.0.0.1:11434/v1/chat/completions'
+$env:FIND_RPT_MODEL_NAME = 'local-rationale-model'
+$env:FIND_RPT_MODEL_API_KEY = 'local-only-key'
+```
+
+Report passages are never permitted to leave the machine. When no local model is available, use `--no-model`; the result is intentionally partial and does not fabricate a takeaway, rationale, context classification, or escalation decision.
+
+## Citation viewer
+
+Start the viewer in a separate terminal:
 
 ```powershell
 find-rpt citations serve --corpus corpus --cache-dir .cache/find-rpt/citations --host 127.0.0.1 --port 8765
 ```
 
-No advance report index is required. The deterministic locator inventories filename candidates per query; citation metadata is created locally when the brief runs.
+Brief citations link to this loopback server. Each citation validates the source size and SHA-256 digest, opens the correct one-based page, and overlays the stored evidence boxes. If the source changed, the citation fails stale instead of opening mismatched evidence.
 
-### Codex
+## Enable the Codex skill
 
-The repository skill is at `skills/find-rpt/`. To install it into a personal Codex environment, copy only that directory into the Codex skills directory and restart or reload Codex:
+The packaged skill is in `skills/find-rpt/`. Install that directory into the personal Codex skills directory and restart or reload Codex. The Python package must be installed in the interpreter Codex invokes.
+
+PowerShell:
 
 ```powershell
-$codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+$codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex' }
 $skillsDir = Join-Path $codexHome 'skills'
 New-Item -ItemType Directory -Force $skillsDir | Out-Null
 Copy-Item -Recurse skills\find-rpt (Join-Path $skillsDir 'find-rpt')
 ```
 
-The command uses the platform's normal `~/.codex/skills` directory when `CODEX_HOME` is unset. The copied skill resolves its bundled launcher relative to `SKILL.md`; it does not depend on the repository being the current directory. The `find-rpt` package must still be installed in the Python environment Codex invokes. When running directly from this repository, the launcher command is:
+Direct repository launcher check:
 
 ```powershell
-python skills/find-rpt/scripts/find_rpt.py --command '/find-rpt BP/ LN 22 Jun 2026 "J.P. Morgan"'
+python skills/find-rpt/scripts/find_rpt.py --command '/find-rpt SHA0 GY 2026-06-22 "Kepler Cheuvreux"' --no-model
 ```
 
-Example Codex invocations:
+Example Codex commands:
 
 ```text
-/find-rpt SAP GY 2026-06-22 "Kepler Cheuvreux"
+/find-rpt SHA0 GY 2026-06-22 "Kepler Cheuvreux"
 /find-rpt BP/ LN 22 Jun 2026 "J.P. Morgan"
 ```
 
-The skill returns the Python renderer's Markdown unchanged. It does not parse PDFs or perform financial calculations itself.
+The skill returns the Python renderer's Markdown unchanged and preserves all citation URLs and warnings.
 
-### Optional Claude Code command
+## Optional Claude Code command
 
-`.claude/commands/find-rpt.md` is a lightweight project command. Claude Code discovers it when opened at the repository root. It forwards `$ARGUMENTS` to the same launcher and output contract; no extraction or rendering logic is duplicated. If a Claude Code version does not support project commands in this format, run the launcher command above directly.
+`.claude/commands/find-rpt.md` is a thin project command. Open Claude Code at the repository root and invoke `/find-rpt` with the same three arguments. If project commands are unavailable in the installed Claude Code version, use the shared Python launcher directly.
 
-### Smoke test, troubleshooting, and cleanup
+## CLI usage
 
-Run the safe smoke test after setup:
-
-```powershell
-python scripts/smoke_test.py
-```
-
-It checks package import, CLI availability, configuration, corpus accessibility without printing filenames or content, viewer connectivity, local model/no-model configuration, and the no-send architecture. Optionally add `--ticker`, `--date`, and `--broker` together to exercise one local report.
-
-Common failures:
-
-- `configuration_error`: check the corpus/cache paths, TOML types, and loopback host/port.
-- `model_unavailable`: start/configure the local model and key, or explicitly enable no-model mode.
-- `citation_viewer_unavailable`: start the viewer with settings matching the launcher; the returned URLs remain preserved.
-- `not_found`: verify query date and broker filename metadata, then the Bloomberg ticker. Do not broaden the result manually.
-- `ambiguous`: inspect corpus integrity; the system intentionally selects no report.
-- stale citation: delete the ignored citation cache and rerun the brief.
-
-Remove disposable local state without touching `corpus/`:
-
-```powershell
-Remove-Item -Recurse -Force .cache\find-rpt -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
-```
-
-Synthetic examples and safe local transcript/redaction instructions are under `examples/`. Real report output must remain local and uncommitted.
-
-## Setup
-
-Use Python 3.11 or newer in a local virtual environment:
-
-```text
-python -m venv .venv
-python -m pip install -e .
-```
-
-Run the second command after activating the environment with the platform-appropriate activation command. Runtime dependencies are `pypdf` for bounded retrieval and PyMuPDF for layout-aware evidence. Source PDFs remain local under `corpus/` and are never installed or committed.
-
-## CLI
-
-Human-readable output:
+Selection only:
 
 ```powershell
 find-rpt "SHA0 GY" 20260622 "Kepler Cheuvreux"
+find-rpt find "BP/ LN" 20260511 "JP Morgan" --format json
 ```
 
-Structured JSON:
+Complete brief:
 
 ```powershell
-find-rpt "BP/ LN" 20260511 "Broker Name" --format json
+find-rpt brief --ticker "SHA0 GY" --date 2026-06-22 --broker "Kepler Cheuvreux"
+find-rpt brief --ticker "SHA0 GY" --date 2026-06-22 --broker "Kepler Cheuvreux" --format json
+find-rpt brief --ticker "SHA0 GY" --date 2026-06-22 --broker "Kepler Cheuvreux" --format text
 ```
 
-Evidence JSON for the uniquely selected report:
+Use `--no-model` for transparent partial output, `--no-visualization` to suppress comparison bars, and `--escalate-partial` only when partial rationale should trigger on an unexplained material revision.
+
+Diagnostic layers:
 
 ```powershell
 find-rpt evidence --ticker "SHA0 GY" --date 2026-06-22 --broker "Kepler Cheuvreux" --format json
+find-rpt revisions --ticker "SHA0 GY" --date 2026-06-22 --broker "Kepler Cheuvreux" --format json
+find-rpt rationale --ticker "SHA0 GY" --date 2026-06-22 --broker "Kepler Cheuvreux" --no-model --format json
+find-rpt escalation --ticker "SHA0 GY" --date 2026-06-22 --broker "Kepler Cheuvreux" --format json
 ```
 
-Direct local extraction, with an optional one-based page range:
+## Output and stop behavior
+
+A complete brief is ordered as:
+
+1. one-glance ticker, broker, query date, internal publication date when material, title, and takeaway;
+2. estimate revisions and consensus comparisons;
+3. why the estimates changed;
+4. publication context and management interaction;
+5. a compact estimate comparison when useful;
+6. material first-read items; and
+7. source, analyst, and warnings.
+
+`not_found` selects nothing. `ambiguous` selects nothing and may return safe candidate metadata. Invalid or unreadable shortlisted PDFs block uniqueness. The skill never broadens the query or merges reports.
+
+When validated material revisions remain unexplained, the renderer surfaces a draft addressed only to report-evidenced research analysts, uses `[TODO: address]` when needed, states that the draft has not been sent, and stops. There is no SMTP dependency, mail provider, mail-client launcher, `mailto:` action, clipboard integration, or send-capable API.
+
+## Tests and verification
+
+Full suite:
 
 ```powershell
-find-rpt evidence --pdf-path "corpus/example.pdf" --pages "1-3,5" --format json
-```
-
-Estimate-revision JSON after deterministic report selection:
-
-```powershell
-find-rpt revisions --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format json
-```
-
-Direct extraction from exactly one local PDF:
-
-```powershell
-find-rpt revisions --pdf-path "corpus/example.pdf" --format json
-```
-
-Bounded rationale extraction after deterministic report selection:
-
-```powershell
-find-rpt rationale --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format json
-```
-
-Direct local extraction, or passage retrieval without a model:
-
-```powershell
-find-rpt rationale --pdf-path "corpus/example.pdf" --format json
-find-rpt rationale --pdf-path "corpus/example.pdf" --no-model --format json
-```
-
-Render the complete research brief:
-
-```powershell
-find-rpt brief --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux"
-find-rpt brief --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format json
-find-rpt brief --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format text
-```
-
-Use `--no-visualization` to suppress comparison bars. Use `--no-model` to exercise the entire local deterministic pipeline and render a transparent partial brief when no local rationale model is configured. A normal brief command without `--no-model` fails clearly if model configuration is missing; it never fills rationale gaps from general knowledge.
-
-Evaluate ambiguity and render only the review-only escalation result:
-
-```powershell
-find-rpt escalation --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format markdown
-find-rpt escalation --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format json
-find-rpt escalation --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format text
-```
-
-The default trigger applies only to `unclear` rationale. Add `--escalate-partial` to `brief` or `escalation` when partial rationale should also trigger if at least one material revision remains unexplained.
-
-### Ambiguity escalation
-
-The trigger is deterministic and uses validated structured data only:
-
-- `RevisionResult` must contain at least one parsed revision;
-- rationale clarity must be `unclear` by default; and
-- at least one material revision must not have a validated driver for the same metric and fiscal period.
-
-The optional partial-rationale policy uses the same unexplained-material-revision test. Clear rationale, no revisions, unavailable rationale clarity, immaterial unexplained changes, and partial rationale without `--escalate-partial` do not trigger.
-
-Materiality is explicit by revision type. Relative changes use an absolute threshold of 3%. A negative old estimate uses the extractor's documented absolute-denominator convention. A zero old value is never compared with the relative threshold. Percentage-point and basis-point-derived moves use a separate 1 percentage-point threshold. Any actual rating or target-price change is material, as is a revision carrying the validated `explicitly_marked_material` indicator. Non-numeric revisions require that explicit indicator; no numeric meaning is inferred.
-
-Questions are generated deterministically from metric, qualifiers, fiscal period, old/new values, relative or percentage-point change, consensus comparison, validated incomplete drivers, report context, and management interaction. Revisions already explained by a validated driver for the same metric and period are omitted. Duplicate rows sharing metric, qualifiers, and period are merged into one question; conflicting observations are not repeated as if they were one value.
-
-Analyst identity comes only from positioned report evidence. The extractor supports first-page bylines/contact blocks, pipe-delimited and multi-line contact layouts, explicit professional designations, roles, addresses, and useful phone numbers. It excludes sales, ESG, disclosure, media, and publishing contacts. An explicitly identified covering or lead analyst is preferred; otherwise all relevant named analysts are addressed. It never derives a name from an address or an address from a broker domain. Missing addresses use exactly `[TODO: address]`; missing names use a neutral greeting and a warning.
-
-The structured draft contains `to`, `analyst_names`, `subject`, `greeting`, `body`, `questions`, `signoff_placeholder`, `unresolved_fields`, `warnings`, `source_report_id`, `escalation_reason`, and an immutable `sent: false` status. Standalone escalation JSON also exposes top-level `sent: false`; JSON brief output exposes `requires_analyst_escalation`, `escalation_reason`, `analyst`, and `email_draft`. Markdown and text put the draft after the brief and end with an explicit statement that it has not been sent. When semantic clarity is unavailable, non-JSON standalone output shows that warning rather than presenting the non-escalation as a fully assessed result.
-
-There is no delivery architecture: no mail library, provider API, credential configuration, `mailto:` action, mail-client launcher, shell mail command, clipboard action, or automatic-send path. Any further action must be taken separately by the user after review and editing outside `find-rpt`.
-
-### Brief output
-
-The default Markdown order is one-glance header, title and takeaway, revisions, rationale/context, estimate picture, first-read items, source/analyst information, then material warnings. When a unique top-of-page internal publication date differs from the corpus/query date, the header shows both with evidence. Empty optional sections are omitted. The concise view shows at most eight cited revision rows, two comparison panels, and four first-read items. It prioritizes rows with consensus and complete old/new values and then sorts revenue, EBITDA, EBIT, margins, EPS, modelling items, target price, and other metrics. An omission count is explicit; no missing value is inferred. `—` means unavailable.
-
-Synthetic example:
-
-```text
-ABC LN — Example Broker — 22 Jun 2026
-
-Synthetic Company: Pricing improves [source]
-Pricing supports the earnings outlook. [source]
-
-What changed
-Metric          Period    Old             New             Revision  Consensus
-Revenue         FY2026E   100 EURm        110 EURm        +10%      105 EURm
-Adjusted EPS    FY2027E   1.20 EUR/share  1.30 EUR/share  +8.3%     1.10 EUR/share
-
-Estimate picture
-EPS FY2027E (EUR/share)
-Old                  │█████████   1.2
-New                  │██████████  1.3
-Consensus            │████████    1.1
-```
-
-The actual Markdown uses a compact table and inline local links. Relative percentage changes and percentage-point margin moves are different fields; a 10% to 12% margin change renders as `+2pp`, not `+20%`. Negative observations use a zero-axis bar, and charts are omitted for a single value, equal values, non-finite values, or missing units. The text renderer is the plain-terminal fallback, preserves each citation URL in angle brackets, and uses the same Unicode block/axis representation supported by Codex and Claude Code terminals.
-
-Warnings are emitted only when they affect interpretation or completeness: unresolved/no revisions, unavailable rationale or takeaway, missing report title/analyst, failed or invalid citations, omitted uncited facts/rows, row caps, and material arithmetic conflicts. A report with no revisions remains a valid partial brief. Individual citation failures omit the affected facts and produce a transparent warning; a total citation-construction error, ambiguous or failed retrieval, unusable PDF, or model failure stops before a misleading complete brief is rendered. The `brief` command always extracts the complete selected PDF and deliberately has no `--pages` option.
-
-Build precise citations from deterministic revision evidence:
-
-```powershell
-find-rpt citations build --ticker "SAP GY" --date "2026-06-22" --broker "Kepler Cheuvreux" --format json
-find-rpt citations build --pdf-path "corpus/example.pdf" --format json
-```
-
-The direct path must resolve under the configured `--corpus` directory. Add
-`--with-rationale` only when a loopback model is configured and citations for the
-validated rationale claims are also required.
-
-Start the local highlighted viewer:
-
-```powershell
-find-rpt citations serve
-```
-
-The server binds to `127.0.0.1:8765` by default. Stop it with `Ctrl+C`. Validate a
-cached citation without opening a browser:
-
-```powershell
-find-rpt citations validate --citation-id "cit-0123456789abcdef01234567"
-```
-
-Use matching `--host`, `--port`, `--corpus`, and `--cache-dir` options when the
-builder and viewer use non-default local settings. `--base-url` on `citations build`
-controls the portable local URLs placed in JSON. It must be a complete loopback
-HTTP origin with an explicit port; remote hosts, credentials, paths, queries, and
-fragments are rejected.
-
-## Local citation viewer
-
-A citation URL has the form:
-
-```text
-http://127.0.0.1:8765/citation/<citation-id>#evidence-target
-```
-
-Activating it resolves the citation ID through the local ignored index, verifies
-the source size and SHA-256 digest, opens the correct one-based page, lands at the
-evidence area, and overlays translucent highlights. The page label identifies the
-claim/evidence role. An `open original PDF` link serves the same indexed source
-through an opaque document ID and preserves the page fragment.
-
-The viewer uses PyMuPDF to render the cited page in memory and an inline SVG for
-the highlight boxes. It requires no PDF.js download, remote font, analytics, CDN,
-or other external asset. It does not create an annotated PDF or modify the source.
-Word boxes are merged into compact line fragments. For structured revision tables,
-the validated metric and fiscal period narrow the highlight to the relevant row,
-period cells, and necessary headers. Evidence spanning pages becomes separate
-citations.
-
-Generated metadata is stored at `.cache/find-rpt/citations/index.json` by default.
-It contains document fingerprints, portable corpus-relative filenames, pages,
-block IDs, boxes, labels, and local URLs, but no report passage or absolute path.
-The whole cache is disposable:
-
-```powershell
-Remove-Item -Recurse -Force .cache/find-rpt/citations
-```
-
-On POSIX systems use `rm -rf .cache/find-rpt/citations`. Rebuild citations after
-cleanup.
-
-### Privacy and security model
-
-- The server accepts loopback hosts only and defaults to `127.0.0.1`; `0.0.0.0`
-  and non-loopback addresses are rejected.
-- URL paths contain validated citation/document IDs, never report paths. Unknown
-  IDs, traversal attempts, and unindexed files are not served.
-- Only regular, non-symlink PDF files beneath the configured corpus root resolve.
-- The original-PDF route serves the source filename from the fingerprint-validated
-  citation record, not duplicated document-index path metadata.
-- Every request rechecks the source size and SHA-256 digest. A changed source
-  returns a clear stale-citation error instead of showing potentially wrong evidence.
-- PDF, image, HTML, and error responses use private `no-store` headers. The server
-  suppresses request logging and never logs extracted report text.
-- Shutting down the viewer closes the server only; source PDFs remain untouched.
-
-### Citation troubleshooting and fallback behavior
-
-- `source PDF changed after citation build`: rebuild evidence and citations from
-  the current source. Do not reuse the stale ID.
-- `citation ID is not indexed`: use the same cache directory for build, validate,
-  and serve, or rebuild the citation.
-- A 404 from a document URL means the document is not indexed/cited or its safe
-  corpus-relative path no longer resolves.
-- A viewer URL using a custom port must be built with the corresponding
-  `--base-url`, although the citation ID itself remains valid on another loopback
-  viewer instance.
-- Image-only PDFs remain unsupported because evidence extraction has no OCR. The
-  viewer intentionally has no annotated-derivative fallback: if safe in-memory page
-  rendering fails, it returns an error and leaves the original untouched. The
-  original-PDF link is a navigation aid, not a substitute for a highlighted citation.
-
-`--no-model` returns the selected candidate passages, deterministic context signals, revision status, and exact model-input block/character counts. It marks semantic interpretation as skipped. Without `--no-model`, missing model configuration fails clearly.
-
-## Rationale model configuration
-
-The model boundary is the `RationaleModel` protocol. Tests use `DeterministicFakeRationaleModel`. The configured runtime provider speaks the OpenAI-compatible chat-completions shape but deliberately accepts only `localhost` or another loopback address, so proprietary passages cannot be sent to an external service.
-
-Configuration is environment-only:
-
-```powershell
-$env:FIND_RPT_MODEL_API_KEY="local-endpoint-key"
-$env:FIND_RPT_MODEL_URL="http://127.0.0.1:11434/v1/chat/completions"
-$env:FIND_RPT_MODEL_NAME="local-rationale-model"
-```
-
-The URL and model name have the displayed defaults; the API key has no default. No `.env` file is loaded. The provider sends only the bounded candidate passages, a grouped revision summary, deterministic context hints, and allowed enum values. It never sends a PDF or unrelated report.
-
-The structured result includes rationale clarity; grounded drivers with metrics, periods, categories, evidence block IDs, causal-link type, and confidence; why-now; report context; management contact and named participants; one-line takeaway; jargon definitions; important first-read items; and warnings. Python rejects mismatched report/revision data, unknown block IDs, claims outside the bounded passages, unsupported metrics or fiscal periods, unsupported numbers, extra schema fields, and malformed types. A driver survives only when its cited sentence contains either direct causal language or explicit hedged causal language; proximity alone is removed. Rating or valuation evidence cannot become an earnings driver, and a `valuation only` driver must link to target price. Model/provider failures return an explicit warning and no invented fallback text.
-
-The brief renderer consumes only validated structured metadata, revision, rationale, and citation models. It does not parse PDFs, call a model, calculate authoritative revision values, or create evidence coordinates. A separate conservative metadata adapter supplies a cited title and evidence-backed analyst fields. It can retain an explicitly named research analyst when an address is absent, but it never derives a name from an address or an address from a naming convention.
-
-Confidence is deterministic, not model-calibrated. A driver is `high` only when it has direct causal support plus a supported metric and period; `medium` means direct support is incomplete or the causal link is explicitly hedged/inferred; `low` means only minimal structured linkage remains. Other grounded claims are `high` for strong single-block lexical support, `medium` for sufficient multi-block or partial lexical support, and otherwise removed or `low`.
-
-`revisions` returns `revisions_found`, `no_revisions`, or `candidates_unresolved`. The last status means revision signals were present but no safe row could be structured. A successful response includes candidate pages and block IDs plus revision rows with metric, qualifiers, period and period basis, old/new values, normalized unit, stated and calculated percentage changes, separately represented percentage-point changes, consensus and derived spreads when explicitly supported, direction, extraction method, confidence, warnings, and page/block evidence references. Missing values are JSON `null`.
-
-The deterministic parsers currently cover prose `from/to` statements, old/new/consensus columns, grouped multi-year new/old/change tables, percentage-only revision matrices, compact `Change in` headers, and tightly bounded same-page consensus joins. A consensus observation is joined only when page, metric, qualifiers, period, and unit match exactly and the match is unique. The parsers never infer an old value from a percentage. Relative changes use `abs(old)` as the denominator; zero denominators remain unresolved. Stated and calculated changes reconcile within a documented 0.25 percentage-point tolerance.
-
-The evidence response preserves `pages -> blocks -> words`. It includes a SHA-256 document ID, source filename, total page count, one-based page numbers, dimensions in PDF points, reading-order text blocks, stable block IDs, bounded block coordinates, and word coordinates with PyMuPDF line/word numbers. PyMuPDF uses zero-based page indexes internally; the Python API and all JSON use one-based page numbers. For locator extraction, the response also includes the deterministic retrieval result. Evidence is emitted to stdout only; no index, cache, page image, or derivative PDF is written.
-
-Python API:
-
-```python
-from find_rpt import PdfEvidenceExtractor
-
-document = PdfEvidenceExtractor().extract("corpus/example.pdf", pages="1-3")
-```
-
-Without installing the package, set `PYTHONPATH` and use the module directly. PowerShell:
-
-```powershell
-$env:PYTHONPATH="src"
-python -m find_rpt "SHA0 GY" 20260622 "Kepler Cheuvreux" --format json
-```
-
-POSIX shells:
-
-```sh
-PYTHONPATH=src python -m find_rpt "SHA0 GY" 20260622 "Kepler Cheuvreux" --format json
-```
-
-Exit codes are `0` for found, `2` for not found, `3` for ambiguous, and `1` for invalid input.
-
-## Retrieval behavior
-
-1. Parse filename metadata and shortlist exact date plus punctuation/case-normalized broker.
-2. Inspect page 1 of each shortlisted file.
-3. Prefer an explicit Bloomberg field, then an explicit ticker field, then title/header evidence, then body evidence.
-4. Return immediately when one candidate has a strong, safe lead.
-5. Otherwise inspect page 2 as a bounded fallback.
-6. Return ambiguous for weak, tied, or near-tied matches rather than guessing.
-7. Return ambiguous if any shortlisted candidate cannot be inspected, because uniqueness cannot then be proved.
-
-Ticker punctuation and whitespace are normalized, so `BP/ LN` and `BP LN` are equivalent. The German Bloomberg suffixes `GY` and `GR` are treated as aliases because the supplied assignment example and report use different forms for the same fixture.
-
-Scores are fixed ranking heuristics, not probabilities or statistically calibrated confidence. Results expose a categorical confidence label, inspected pages, evidence kind, extracted line number, matched normalized ticker, and sanitized per-file errors. They do not emit the report line, surrounding report text, or a report-derived text fingerprint. Candidate paths use portable forward-slash form and do not expose an absolute local path.
-
-## Tests
-
-Run unit tests plus the local filename-only corpus evaluation:
-
-```powershell
-$env:PYTHONPATH="src"
 python -m unittest discover -s tests -v
 ```
 
-On POSIX shells, use `PYTHONPATH=src python -m unittest discover -s tests -v`.
+Focused integration and packaging checks:
 
-`tests/evaluation_cases.json` contains 11 manually verified query/filename pairs. `tests/revision_evaluation_cases.json` contains only safe filename/broker metadata and expected extraction status/counts for 11 real reports. Neither file contains PDF text, financial values, coordinates, or screenshots.
+```powershell
+python -m unittest tests.test_corpus_evaluation tests.test_skill_packaging -v
+python -m compileall -q src skills scripts tests
+python -m pip check
+python scripts/smoke_test.py
+```
 
-The evidence and citation tests also run extraction against local broker/layout families when
-`corpus/` is available. They validate one-based page numbering, bounded rectangles,
-source-page text membership, deterministic block order/IDs, direct-path extraction,
-retrieval-to-evidence CLI integration, citation resolution, and correct page targeting.
-Corpus text and coordinates remain in memory and are not written to test artifacts.
+No separate lint or static type checker is configured; the release gate records those checks as not configured rather than passed. `python -m compileall` is the syntax check. See `docs/evaluation.md` for automated and manual results.
 
-### Brief troubleshooting
+## Evaluation summary
 
-- `FIND_RPT_MODEL_API_KEY is not configured`: configure the loopback model above or add `--no-model` for a clearly labelled partial brief.
-- `rationale not available` or `semantic interpretation skipped`: the revision table and citations are still validated, but the explanation/takeaway is intentionally absent.
-- `report title not identified` or `analyst not identified`: the conservative front-matter rules did not find safe evidence. No contact detail is inferred.
-- `citation requests failed` or `uncited revision rows omitted`: affected facts are not rendered. Rebuild against the same source/evidence and inspect the citation error.
-- No estimate picture: fewer than two distinct finite observations with one validated unit were available, or `--no-visualization` was used.
-- Citation links do not open: start `find-rpt citations serve` with the same corpus/cache/host/port used by the brief. The local viewer is required for highlighted passage links.
+The final local evaluation uses twelve real reports across twelve broker/layout families and all three corpus dates, plus a not-found control. Deterministic selection is measured separately from revision, rationale, context, citation, rendering, and escalation results. Real report semantics remain unmeasured when a loopback model is unavailable; synthetic adversarial tests cover the grounding validator and complete renderer without overstating real-model accuracy.
 
-The revision tests cover arithmetic (including negative and zero old values), percentages versus percentage points and basis points, currency/scale/per-share units, fiscal/calendar periods, qualifiers, exact same-page consensus joins and spreads, unit mismatches, disclosure-only pages, unresolved table states, repeatability, CLI integration, evidence resolution, and 11 local reports across multiple brokers.
+Current release evidence, limitations, and acceptance status are in:
 
-Rationale tests cover candidate retrieval under dense revision evidence, context signals, explicit management participants, valid and invented evidence IDs, cross-document revision rejection, clear/partial/unclear rationale, proximity-only false drivers, rating/valuation separation, role and jargon validation, malformed/extra-schema output, provider failures, missing configuration, loopback enforcement, fake-model determinism, CLI behavior, and repeatability. Citation tests cover stable IDs, evidence/page resolution, geometry, multi-line and multi-block passages, multi-page splitting, stale sources, invalid IDs, traversal, unindexed access, loopback binding, cache privacy, period-specific table highlights, CLI integration, and viewer routes. Renderer tests additionally enforce citation gating, cross-document metadata rejection, full-document brief extraction, and URL-preserving text output. Fifteen local reports across thirteen broker/layout families are checked in rationale retrieval-only mode. The complete suite currently contains 102 tests.
+- `docs/evaluation.md` - metrics and sample limitations;
+- `SUBMISSION_CHECKLIST.md` - release gates;
+- `REVIEWER_GUIDE.md` - fastest review path; and
+- `DEVELOPMENT_LOG.md` plus `development-notes/` - AI-assisted development record.
 
-## Current limitations
+## Privacy and data handling
 
-- Only the first two pages are inspected. A ticker absent from both produces not found.
-- Broker matching is normalized exact matching; it does not yet maintain a broker alias registry.
-- Ticker resolution is deterministic lexical evidence scoring, not company/entity resolution.
-- A multi-security or sector report can still contain a strongly labelled ticker for a non-primary security. This slice has no company-identity resolver, so such results require particular scrutiny.
-- `GY`/`GR` aliasing is project-specific and could be inappropriate for a corpus where those suffixes intentionally distinguish listings.
-- Evidence line numbers refer to extracted page text and are retrieval diagnostics, not final claim citations.
-- The evidence layer requires a usable embedded text layer; it does not perform OCR.
-- Reading order is PyMuPDF's deterministic sorted block order and may not recover every complex table's semantic order.
-- Revision extraction is deliberately partial. Nested row labels, vertically split labels, and tables that require carrying a parent metric into unlabeled subrows remain unresolved.
-- A percentage-only matrix supplies a stated revision but no old/new values; the extractor keeps both values `null` rather than back-solving them.
-- Consensus values are joined across separate tables only on the same page with a unique exact match on metric, qualifiers, fiscal period, and unit. Cross-page, fuzzy-label, qualifier-mismatched, or unit-mismatched consensus evidence remains unlinked.
-- Unprefixed years such as `2027E` retain `period_basis: "unspecified"`; the extractor does not silently relabel them as fiscal or calendar years.
-- Display-rounded old/new values can legitimately disagree with a source-stated percentage. These rows are retained with a reconciliation warning.
-- Boxes extending outside a PDF page are clipped to the page boundary; degenerate boxes are omitted.
-- Block IDs are stable for unchanged PDF bytes with the supported PyMuPDF extraction behavior. Replacing a PDF or changing parser behavior intentionally invalidates references.
-- Candidate passage selection is capped at 24 blocks and 12,000 extracted characters. A single oversized first block may be truncated in the model payload while retaining its source block ID.
-- Deterministic context signals are retrieval hints, not final classifications; the validated model output still needs direct supporting evidence.
-- The lexical validator is intentionally conservative and can remove a well-supported paraphrase when it shares too little terminology with the cited passage.
-- Inferred drivers require explicit hedging and causal wording in one cited sentence; genuinely implicit broker reasoning can therefore be omitted and marked unclear.
-- Jargon definitions are retained only for a small deterministic glossary or when the report explicitly defines the term. Unsupported house-specific expansions are removed.
-- Real-report semantic accuracy requires a configured local model and manual claim review. The checked-in evaluation records bounded retrieval results but does not claim model accuracy without such a run.
-- Citation page rendering is rasterized at 1.5x for a dependency-free local viewer; it is not a replacement for the PDF's native search, selectable text, forms, or accessibility tree.
-- Revision-table line narrowing is deterministic and conservative. It can retain another period stated in the same compact source line, and it falls back to the validated block geometry when no safe row/period selector resolves.
-- The citation cache is not a background catalog. URLs work only while a viewer using the matching corpus and cache is running.
+- `candidate_brief.pdf`, `briefing.pdf`, and everything under `corpus/` are immutable local source material.
+- Never commit, copy, upload, attach, publish, or redistribute a report, excerpt, report-derived image, or generated real-report brief.
+- Evidence coordinates, citation cache, temporary renderings, local configuration, and real transcripts remain ignored and local.
+- Only a loopback model endpoint is supported. No external telemetry or upload path exists.
+- Committed tests and examples are synthetic or contain only safe query identifiers and aggregate metrics.
+
+## Known limitations
+
+- Retrieval identity is bounded to the first two pages and remains lexical; multi-security documents can be ambiguous.
+- There is no OCR fallback for image-only reports.
+- Dense nested or wrapped tables can be unresolved or conservatively incomplete.
+- Separate consensus tables join only with exact same-page metric, qualifier, period, and unit alignment.
+- Analyst extraction favors precision and can miss compressed contacts; it never infers names or addresses.
+- Complete real rationale, context, management, takeaway, and escalation accuracy require a configured local model and manual review.
+- Citation URLs require the matching loopback viewer, cache, and unchanged source PDF.
+
+## Repository layout
+
+```text
+src/find_rpt/                 authoritative Python pipeline
+skills/find-rpt/              packaged Codex skill and thin launcher
+.claude/commands/             optional Claude Code wrapper
+tests/                        synthetic and safe real-corpus regression metadata
+docs/                         requirements, discovery, decisions, evaluation
+examples/                     submission-safe synthetic examples and templates
+development-notes/            safe AI-development and transcript guidance
+scripts/                      smoke test and structural redactor
+```
+
+## Troubleshooting
+
+- `configuration_error`: check local paths, TOML types, and loopback hosts/ports.
+- `model_unavailable`: start the configured local model and set its key, or explicitly use no-model mode.
+- `citation_viewer_unavailable`: start the viewer with the same corpus, cache, host, and port.
+- stale citation: remove the ignored citation cache and rerun the brief.
+- `not_found`: verify the filename date and broker, then the Bloomberg ticker; do not broaden manually.
+- `ambiguous`: inspect corpus integrity or query metadata; do not select a candidate by hand.
+- garbled terminal bars: use a UTF-8 terminal; numeric values remain alongside every visualization line.
+
+## Cleanup
+
+These commands remove disposable local state without touching `corpus/`:
+
+```powershell
+Remove-Item -Recurse -Force .cache\find-rpt -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force tmp -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force build,dist -ErrorAction SilentlyContinue
+Get-ChildItem -Directory -Recurse -Filter __pycache__ | Remove-Item -Recurse -Force
+```
+
+Remove `.venv/` separately only when you intend to rebuild the environment.

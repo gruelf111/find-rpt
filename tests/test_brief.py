@@ -337,6 +337,25 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(result.analysts, ())
         self.assertIn("analyst_not_identified", result.warnings)
 
+    def test_multiline_title_beats_generic_format_header_and_rating_line(self) -> None:
+        path = self.root / "multiline-title.pdf"
+        source = fitz.open()
+        page = source.new_page(width=600, height=800)
+        page.insert_text((420, 35), "First Reaction Note", fontsize=12)
+        page.insert_text((40, 70), "Synthetic Hold (Buy)", fontsize=18)
+        page.insert_textbox(
+            fitz.Rect(40, 110, 420, 165),
+            "Pricing supports the outlook, but demand\nremains uncertain into next year",
+            fontsize=18,
+        )
+        source.save(path)
+        source.close()
+        result = ReportMetadataExtractor().extract(PdfEvidenceExtractor().extract(path))
+        self.assertEqual(
+            result.title,
+            "Pricing supports the outlook, but demand remains uncertain into next year",
+        )
+
     def test_explicit_name_role_and_email_are_retained(self) -> None:
         path = self.root / "analyst.pdf"
         source = fitz.open()
@@ -353,6 +372,49 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(result.analysts[0].name, "Alex Example")
         self.assertEqual(result.analysts[0].email, "alex@example.test")
         self.assertIn("Analyst", result.analysts[0].role)
+
+    def test_parenthesized_analyst_role_is_retained_and_esg_contact_excluded(self) -> None:
+        path = self.root / "parenthesized-analyst.pdf"
+        source = fitz.open()
+        page = source.new_page(width=600, height=800)
+        page.insert_text((40, 45), "Synthetic Company: Results review", fontsize=18)
+        page.insert_textbox(
+            fitz.Rect(40, 80, 350, 150),
+            "Alex Example (Analyst)\n+44 20 1234 5678\nalex@example.test",
+            fontsize=10,
+        )
+        page.insert_textbox(
+            fitz.Rect(40, 170, 350, 240),
+            "Eve Example (ESG Analyst)\n+44 20 8765 4321\neve@example.test",
+            fontsize=10,
+        )
+        source.save(path)
+        source.close()
+        result = ReportMetadataExtractor().extract(PdfEvidenceExtractor().extract(path))
+        self.assertEqual(tuple(item.name for item in result.analysts), ("Alex Example",))
+        self.assertEqual(result.analysts[0].email, "alex@example.test")
+
+    def test_starred_pipe_byline_is_retained_but_later_disclosure_heading_is_not(self) -> None:
+        path = self.root / "starred-byline.pdf"
+        source = fitz.open()
+        page = source.new_page(width=600, height=800)
+        page.insert_text((40, 45), "Synthetic Company: Event reaction", fontsize=18)
+        page.insert_textbox(
+            fitz.Rect(350, 80, 580, 150),
+            "Alex Example * | Equity Analyst\n+44 20 1234 5678 | alex@example.test",
+            fontsize=10,
+        )
+        page = source.new_page(width=600, height=800)
+        page.insert_textbox(
+            fitz.Rect(40, 80, 400, 160),
+            "United Kingdom\nResearch Analyst\ncompliance@example.test",
+            fontsize=10,
+        )
+        source.save(path)
+        source.close()
+        result = ReportMetadataExtractor().extract(PdfEvidenceExtractor().extract(path))
+        self.assertEqual(tuple(item.name for item in result.analysts), ("Alex Example",))
+        self.assertEqual(result.analysts[0].email, "alex@example.test")
 
 
 class BriefCliTests(unittest.TestCase):
@@ -470,7 +532,7 @@ class RealReportBriefEvaluationTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=2)
 
-    def test_eleven_real_brief_commands_complete_in_no_model_mode(self) -> None:
+    def test_real_brief_commands_complete_in_no_model_mode(self) -> None:
         corpus = Path("corpus")
         if not corpus.is_dir():
             self.skipTest("local corpus is not available")
@@ -491,7 +553,7 @@ class RealReportBriefEvaluationTests(unittest.TestCase):
                     self.assertEqual(payload["ticker"], case["ticker"])
                     self.assertIn("semantic_interpretation_skipped", payload["warnings"])
 
-    def test_eleven_real_reports_render_safe_partial_briefs_with_valid_row_citations(self) -> None:
+    def test_real_reports_render_safe_partial_briefs_with_valid_row_citations(self) -> None:
         corpus = Path("corpus")
         if not corpus.is_dir():
             self.skipTest("local corpus is not available")

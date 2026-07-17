@@ -296,6 +296,26 @@ Alternative considered: require a model to write or deduplicate the questions. R
 
 A source/dependency guard test rejects named mail libraries, providers, credential variables, client links, and delivery entry points. Any use of the draft requires separate user review and action outside this repository.
 
+## 2026-07-17 - Final evaluation decisions
+
+### Compact ticker matching
+
+Some report identifier rows collapse a Bloomberg-style ticker by removing its space. The retriever accepts that compact form only as an exact token on a line containing identifier punctuation such as a pipe, slash, comma, colon, or parentheses. Ordinary prose does not qualify. This recovers real compact identifiers without turning ticker matching into a substring heuristic.
+
+Alternative considered: normalize every line by deleting spaces. Rejected because it creates false positives in normal words and violates deterministic exact-match expectations.
+
+### Analyst evidence beyond page one
+
+Page-one bylines may use parenthesized roles, pipe separators, or footnote stars and are retained when their name evidence is valid. On later pages, generic role or email proximity is insufficient; explicit analyst-certification evidence is required. This prevents disclosure headings from becoming covering analysts while preserving a conservative recovery route.
+
+Alternative considered: trust every line near an email anywhere in the report. Rejected after real layouts produced disclosure false positives.
+
+### Honest semantic acceptance boundary
+
+No loopback rationale model was configured during final evaluation. Real packaged outputs are therefore evaluated as transparent partial briefs, not as evidence of semantic accuracy. Manual report reading is recorded separately from automated performance. Because the audited reports did not supply a defensible unclear-rationale case, no clear report was relabelled to satisfy a scenario quota; synthetic fixtures cover the escalation behavior.
+
+The repository may be presented for deterministic/no-model review, but an unqualified complete-performance claim requires manual approval of model-backed real briefs. This boundary is a release decision, not an implementation fallback.
+
 ### Final adversarial-review hardening
 
 The final review found three material boundary gaps. First, JSON relied on the absence of a send method and the rendered not-sent sentence but did not carry an explicit machine-readable status. `EmailDraft` and `EscalationResult` now expose frozen, non-initializable `sent: false` fields. Second, a generic revision warning string could activate explicit materiality. Only the dedicated validated `materiality_indicators` field can now do so; confidence and warnings cannot override missing evidence. Third, standalone Markdown/text no-model output previously hid `rationale_clarity_unavailable` behind a generic no-escalation sentence. It now surfaces structured warnings.
