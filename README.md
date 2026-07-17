@@ -222,7 +222,7 @@ Focused integration and packaging checks:
 
 ```powershell
 python -m unittest tests.test_corpus_evaluation tests.test_skill_packaging -v
-python -m compileall -q src skills scripts tests
+python -m compileall -q src scripts tests .agents/skills/find-rpt
 python -m pip check
 python scripts/smoke_test.py
 ```

@@ -297,7 +297,6 @@ class PackagingFilesTests(unittest.TestCase):
                     "--quiet",
                     "--no-cache-dir",
                     "--no-deps",
-                    "--no-build-isolation",
                     "--target",
                     directory,
                     str(ROOT),

@@ -9,7 +9,7 @@ PowerShell:
 ```powershell
 python -m venv tmp\reviewer-venv
 $python = (Resolve-Path .\tmp\reviewer-venv\Scripts\python.exe).Path
-& $python -m pip install 'setuptools>=69' .
+& $python -m pip install .
 $env:FIND_RPT_CORPUS = (Resolve-Path corpus).Path
 $env:FIND_RPT_NO_MODEL = 'true'
 ```

@@ -169,3 +169,10 @@
 - Updated active Claude, smoke-test, example, checklist, decision, and packaging-test references to `.agents/skills/find-rpt`. Retained the earlier `skills/find-rpt` development-log entry as historical context.
 - Focused packaging tests passed 18/18 with 3 subtests, and the complete suite passed 168/168 with 111 subtests. No separate lint or static-type command is configured; compilation was used as the documented syntax check.
 - The cleanup safety scan found no changed PDF or corpus source, proprietary report text, generated real-report output, environment file, secret, analyst contact, or send-capable email mechanism.
+
+## 2026-07-18 - Clean-environment packaging correction
+
+- A fresh Python 3.11 environment exposed that the packaging test disabled PEP 517 build isolation and therefore depended on an undeclared `wheel` installation in the invoking environment. Removed that opt-out; `setuptools>=69` remains the isolated build backend, while runtime dependencies and application behavior are unchanged.
+- Removed the reviewer guide's manual setuptools preinstallation workaround and updated the documented syntax-check path to cover the canonical `.agents` skill. The README continues to document `pip install -e .`; no `dev` extra is documented or needed for the standard-library test suite.
+- In pristine Python 3.11.9 environments containing only pip 24.0 and setuptools 65.5.0 initially, the exact README `pip install -e .` workflow and reviewer `pip install .` command both completed through isolated builds without a preinstalled `wheel`. The focused clean-install test and dependency checks passed.
+- Focused packaging tests passed 18/18 with 3 subtests, and the complete pytest suite passed 168/168 with 111 subtests. No separate lint or static-type command is configured.

@@ -355,3 +355,7 @@ Codex is primary through `.agents/skills/find-rpt/`. The optional Claude project
 An installed skill must not assume that the repository is the current directory. `SKILL.md` therefore directs the agent to resolve the bundled launcher relative to the skill file; the repository-relative command remains only as a direct-development example. The documented PowerShell installer now resolves `CODEX_HOME` with an explicit `~/.codex` fallback instead of interpolating an unset variable.
 
 Agent JSON is serialized with ASCII escapes at the outer transport boundary. This avoids Windows legacy-console encoding failures for Unicode comparison bars while `json.loads` reconstructs the exact original Markdown. Configuration and process failures are also sanitized before serialization so an operating-system error cannot disclose an absolute local path. The smoke-test no-send scan covers the Python runtime, skill instructions and launcher, optional Claude command, and package dependencies.
+
+### Clean-environment build isolation
+
+Fresh installs use pip's normal PEP 517 build isolation. The clean-install packaging test must not pass `--no-build-isolation`, because that option makes undeclared packages in the invoking environment responsible for backend commands such as wheel building. `setuptools>=69` remains the complete declared build backend; `wheel` is not a runtime dependency, and the standard-library test suite does not require a project `dev` extra.
