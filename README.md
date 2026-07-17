@@ -6,7 +6,7 @@
 /find-rpt {Bloomberg ticker} {corpus date} {broker}
 ```
 
-The package performs deterministic report selection, revision arithmetic, evidence geometry, citation validation, and escalation gating. A model may interpret only a bounded evidence set from the selected report. It can draft an analyst clarification email when material revisions remain unexplained, but it has no send path.
+The package performs deterministic report selection, revision arithmetic, evidence geometry, citation validation, semantic-output validation, and escalation gating. Inside Codex, the active agent may interpret only a compact bounded evidence bundle; no model API key is required. The existing loopback OpenAI-compatible provider remains available for standalone use. The system can draft an analyst clarification email when material revisions remain unexplained, but it has no send path.
 
 ## Architecture
 
@@ -16,7 +16,9 @@ The package performs deterministic report selection, revision arithmetic, eviden
   -> deterministic ticker resolution (one report or stop)
   -> local PDF blocks, words, pages, and bounding boxes
   -> deterministic revisions, arithmetic, units, periods, and citations
-  -> bounded loopback-model interpretation and Python grounding checks
+  -> bounded evidence bundle
+  -> active Codex agent interpretation OR optional loopback API interpretation
+  -> Python grounding checks and unsupported-claim removal
   -> concise brief or review-only analyst draft
   -> loopback highlighted citation viewer
 ```
@@ -27,7 +29,7 @@ This separation matters: a model is useful for plain-English interpretation, but
 
 - Python 3.11 or newer;
 - a local `corpus/` directory containing the supplied PDFs, or another configured local path;
-- an optional OpenAI-compatible model endpoint on loopback for complete rationale output; and
+- Codex for agent-hosted semantic output, or an optional OpenAI-compatible loopback endpoint for standalone complete output; and
 - a browser for opening highlighted citations from the loopback viewer.
 
 Runtime dependencies are constrained in `pyproject.toml`: `pypdf>=6,<7` and `PyMuPDF>=1.26,<2`. No database, cloud service, telemetry client, mail library, or web framework is required.
@@ -70,6 +72,7 @@ Configuration precedence is launcher flags, environment variables, `[find_rpt]` 
 | --- | --- | --- | --- | --- |
 | Corpus | `--corpus` | `FIND_RPT_CORPUS` | `corpus_path` | `corpus` |
 | Citation cache | `--cache-dir` | `FIND_RPT_CACHE_DIR` | `cache_path` | `.cache/find-rpt/citations` |
+| Model mode | `--model-mode` | `FIND_RPT_MODEL_MODE` | `model_mode` | `api` in the standalone launcher; the Codex skill uses `agent-hosted` stages |
 | Model provider | `--model-provider` | `FIND_RPT_MODEL_PROVIDER` | `model_provider` | `local-openai-compatible` |
 | Model name | `--model-name` | `FIND_RPT_MODEL_NAME` | `model_name` | `local-rationale-model` |
 | Model URL | `--model-url` | `FIND_RPT_MODEL_URL` | `model_url` | `http://127.0.0.1:11434/v1/chat/completions` |
@@ -78,9 +81,26 @@ Configuration precedence is launcher flags, environment variables, `[find_rpt]` 
 | Viewer port | `--citation-viewer-port` | `FIND_RPT_CITATION_PORT` | `citation_viewer_port` | `8765` |
 | No-model mode | `--no-model` | `FIND_RPT_NO_MODEL` | `no_model` | `false` |
 
-`.env.example` documents equivalent variables, but the package does not auto-load `.env` files. `model_provider` accepts only `local-openai-compatible` or `none`; model and citation hosts must resolve to loopback. `none` enables transparent no-model mode.
+`.env.example` documents equivalent variables, but the package does not auto-load `.env` files. `FIND_RPT_MODEL_MODE` accepts `agent-hosted`, `api`, or `none`. `agent-hosted` is the Codex-skill default and must use the prepare/finalize commands; a standalone one-shot `brief` cannot summon a Codex host. `api` retains the existing loopback OpenAI-compatible provider and is the standalone default only when `FIND_RPT_MODEL_API_KEY` is configured. `none` or `--no-model` produces transparent partial output. Model and citation hosts must resolve to loopback.
 
-## Local model configuration
+## Semantic modes
+
+The Codex skill uses `FIND_RPT_MODEL_MODE=agent-hosted`: Python emits bounded evidence, the active Codex model returns strict rationale JSON, and Python reselects the report, validates the JSON, removes unsupported claims, builds citations, and renders the final brief. The Codex host is used only when the skill runs inside Codex.
+
+For direct standalone CLI use, either configure API mode or request no-model output. Standalone execution without an API key or `--no-model` fails clearly; it does not silently treat the process as agent-hosted.
+
+| Invocation/configuration | Exact behavior |
+| --- | --- |
+| Codex skill, model mode unset | Runs `agent prepare`/`agent finalize`; no API key or provider call is required. |
+| `FIND_RPT_MODEL_MODE=agent-hosted` with the two-stage commands | Same agent-hosted behavior; the commands never invoke the API provider. |
+| One-shot standalone command with `agent-hosted` | Fails with instructions to use the two-stage commands. |
+| `FIND_RPT_MODEL_MODE=api` | Uses the retained loopback OpenAI-compatible provider. |
+| API mode without `FIND_RPT_MODEL_API_KEY` | Fails explicitly; no fallback prose is produced. |
+| `FIND_RPT_MODEL_MODE=none` or `--no-model` | Returns a transparent partial result without semantic interpretation. |
+| Standalone mode unset, API key configured | Selects API mode. |
+| Standalone mode and API key both unset | Fails explicitly and asks for API configuration or no-model mode. |
+
+### Optional standalone API mode
 
 Point the launcher at an OpenAI-compatible chat-completions endpoint running locally, then set its model name and key in the shell. The key may be a placeholder if the local server does not authenticate.
 
@@ -88,6 +108,7 @@ Point the launcher at an OpenAI-compatible chat-completions endpoint running loc
 $env:FIND_RPT_MODEL_URL = 'http://127.0.0.1:11434/v1/chat/completions'
 $env:FIND_RPT_MODEL_NAME = 'local-rationale-model'
 $env:FIND_RPT_MODEL_API_KEY = 'local-only-key'
+$env:FIND_RPT_MODEL_MODE = 'api'
 ```
 
 Report passages are never permitted to leave the machine. When no local model is available, use `--no-model`; the result is intentionally partial and does not fabricate a takeaway, rationale, context classification, or escalation decision.
@@ -115,7 +136,7 @@ New-Item -ItemType Directory -Force $skillsDir | Out-Null
 Copy-Item -Recurse skills\find-rpt (Join-Path $skillsDir 'find-rpt')
 ```
 
-Direct repository launcher check:
+Direct deterministic no-model launcher check:
 
 ```powershell
 python skills/find-rpt/scripts/find_rpt.py --command '/find-rpt SHA0 GY 2026-06-22 "Kepler Cheuvreux"' --no-model
@@ -128,7 +149,7 @@ Example Codex commands:
 /find-rpt BP/ LN 22 Jun 2026 "J.P. Morgan"
 ```
 
-The skill returns the Python renderer's Markdown unchanged and preserves all citation URLs and warnings.
+The skill runs the two-stage agent-hosted flow and displays only the final Python renderer's Markdown. It never displays or rewrites the intermediate evidence bundle or semantic JSON.
 
 ## Optional Claude Code command
 
@@ -152,6 +173,15 @@ find-rpt brief --ticker "SHA0 GY" --date 2026-06-22 --broker "Kepler Cheuvreux" 
 ```
 
 Use `--no-model` for transparent partial output, `--no-visualization` to suppress comparison bars, and `--escalate-partial` only when partial rationale should trigger on an unexplained material revision.
+
+Agent-hosted stages used by Codex:
+
+```powershell
+find-rpt agent prepare "SHA0 GY" 2026-06-22 "Kepler Cheuvreux" --corpus corpus --format json
+Get-Content semantic-output.json -Raw | find-rpt agent finalize "SHA0 GY" 2026-06-22 "Kepler Cheuvreux" --corpus corpus --input - --format agent-json
+```
+
+The prepare bundle contains the normalized request, a safe selected-report identifier, grouped validated revision identifiers, bounded non-duplicated rationale/context passages, stable block IDs, closed metric/period allowlists, deterministic analyst candidates without addresses, and warning codes. It contains no authoritative revision values, page numbers, citation URLs, bounding boxes, or unrelated report text. Finalize accepts the exact existing rationale schema through `--input` or stdin, removes unsupported fields and claims, and returns a warning-bearing partial brief if parsing or validation fails.
 
 Diagnostic layers:
 
@@ -213,7 +243,7 @@ Current release evidence, limitations, and acceptance status are in:
 - `candidate_brief.pdf`, `briefing.pdf`, and everything under `corpus/` are immutable local source material.
 - Never commit, copy, upload, attach, publish, or redistribute a report, excerpt, report-derived image, or generated real-report brief.
 - Evidence coordinates, citation cache, temporary renderings, local configuration, and real transcripts remain ignored and local.
-- Only a loopback model endpoint is supported. No external telemetry or upload path exists.
+- Agent-hosted mode uses the active Codex model only inside the skill; standalone API mode supports only a loopback endpoint. No external telemetry or upload path exists.
 - Committed tests and examples are synthetic or contain only safe query identifiers and aggregate metrics.
 
 ## Known limitations
@@ -223,7 +253,7 @@ Current release evidence, limitations, and acceptance status are in:
 - Dense nested or wrapped tables can be unresolved or conservatively incomplete.
 - Separate consensus tables join only with exact same-page metric, qualifier, period, and unit alignment.
 - Analyst extraction favors precision and can miss compressed contacts; it never infers names or addresses.
-- Complete real rationale, context, management, takeaway, and escalation accuracy require a configured local model and manual review.
+- Complete real rationale, context, management, takeaway, and escalation accuracy require either the Codex agent-hosted skill or a configured local API model, plus manual review.
 - Citation URLs require the matching loopback viewer, cache, and unchanged source PDF.
 
 ## Repository layout
@@ -242,7 +272,7 @@ scripts/                      smoke test and structural redactor
 ## Troubleshooting
 
 - `configuration_error`: check local paths, TOML types, and loopback hosts/ports.
-- `model_unavailable`: start the configured local model and set its key, or explicitly use no-model mode.
+- `model_unavailable`: for standalone use, select API mode and configure its loopback key, or explicitly use no-model mode. For Codex, use the skill's prepare/finalize workflow.
 - `citation_viewer_unavailable`: start the viewer with the same corpus, cache, host, and port.
 - stale citation: remove the ignored citation cache and rerun the brief.
 - `not_found`: verify the filename date and broker, then the Bloomberg ticker; do not broaden manually.

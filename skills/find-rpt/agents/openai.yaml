@@ -1,4 +1,4 @@
 interface:
   display_name: "Find Research Report"
   short_description: "Find and brief one local sell-side report"
-  default_prompt: "Use $find-rpt to locate one local report and return an evidence-backed brief."
+  default_prompt: "Use $find-rpt to locate one local report, interpret only its bounded evidence bundle, and return the Python-validated brief."

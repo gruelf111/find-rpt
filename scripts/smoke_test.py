@@ -75,11 +75,21 @@ def main() -> int:
             "ok": viewer_ok,
             "action": None if viewer_ok else "start: find-rpt citations serve",
         })
-        model_ok = settings.no_model or bool(os.environ.get(settings.model_api_key_env))
+        model_ok = (
+            settings.model_mode == "agent-hosted"
+            or settings.no_model
+            or bool(os.environ.get(settings.model_api_key_env))
+        )
         checks.append({
             "check": "model_configuration",
             "ok": model_ok,
-            "mode": "no-model" if settings.no_model else "local-model",
+            "mode": (
+                "agent-hosted"
+                if settings.model_mode == "agent-hosted"
+                else "no-model"
+                if settings.no_model
+                else "local-model"
+            ),
             "action": None if model_ok else f"set {settings.model_api_key_env} or enable no_model",
         })
 

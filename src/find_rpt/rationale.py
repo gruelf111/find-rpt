@@ -65,11 +65,25 @@ MANAGEMENT_INTERACTION_RE = re.compile(
     re.I | re.S,
 )
 NUMBER_RE = re.compile(r"(?<![A-Za-z])[-+]?\d+(?:[.,]\d+)?%?")
+POSITIVE_EFFECT_RE = re.compile(
+    r"\b(?:raise[sd]?|increase[sd]?|lift(?:ed|s)?|support(?:ed|s)?|"
+    r"boost(?:ed|s)?|improv(?:e[sd]?|ing))\b",
+    re.I,
+)
+NEGATIVE_EFFECT_RE = re.compile(
+    r"\b(?:lower(?:ed|s)?|reduce[sd]?|cut(?:s|ting)?|weigh(?:ed|s)?|"
+    r"hurt(?:s|ing)?|declin(?:e[sd]?|ing))\b",
+    re.I,
+)
 TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,}")
 STOPWORDS = {
     "and", "the", "for", "with", "that", "this", "from", "into", "because",
     "after", "before", "broker", "report", "estimate", "estimates", "change",
     "changed", "higher", "lower", "reflecting", "driven", "results", "result",
+}
+TOKEN_EXPANSIONS: dict[str, set[str]] = {
+    "tp": {"target", "price"},
+    "pt": {"price", "target"},
 }
 WARNING_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,79}$")
 MAX_CLAIM_CHARACTERS = 500
@@ -120,6 +134,9 @@ class ModelResponseError(RationaleError):
 
 class RationaleInputError(RationaleError):
     pass
+
+
+MODEL_MODES = {"agent-hosted", "api", "none"}
 
 
 @dataclass(frozen=True)
@@ -481,6 +498,135 @@ def _model_payload(
     }
 
 
+def resolve_model_mode(*, no_model: bool = False) -> str:
+    """Resolve standalone model behavior without treating Codex as an API provider."""
+    if no_model:
+        return "none"
+    configured = os.environ.get("FIND_RPT_MODEL_MODE", "").strip().casefold()
+    if configured:
+        if configured not in MODEL_MODES:
+            raise ModelConfigurationError(
+                "FIND_RPT_MODEL_MODE must be agent-hosted, api, or none"
+            )
+        return configured
+    if os.environ.get("FIND_RPT_MODEL_API_KEY", "").strip():
+        return "api"
+    raise ModelConfigurationError(
+        "No standalone semantic mode is configured; set FIND_RPT_MODEL_MODE=api with "
+        "FIND_RPT_MODEL_API_KEY, or use --no-model. agent-hosted mode is available only "
+        "through `find-rpt agent prepare` and `find-rpt agent finalize`."
+    )
+
+
+def agent_evidence_bundle(
+    document: EvidenceDocument,
+    revisions: RevisionResult,
+    passages: tuple[CandidatePassage, ...],
+) -> dict[str, Any]:
+    """Return the compact, bounded payload that a Codex host may interpret."""
+    allowed_metrics = sorted({item.metric for item in revisions.revisions})
+    allowed_periods = sorted(
+        {item.fiscal_period for item in revisions.revisions if item.fiscal_period}
+    )
+    selected_passage_ids = {item.block_id for item in passages}
+    grouped_revisions: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in revisions.revisions:
+        block_ids = tuple(
+            dict.fromkeys(
+                block_id for evidence in item.evidence for block_id in evidence.block_ids
+            )
+        )
+        grouped = grouped_revisions.setdefault(
+            (item.metric, item.direction),
+            {
+                "metric_id": item.metric,
+                "direction": item.direction,
+                "fiscal_period_ids": [],
+                "evidence_block_ids": [],
+            },
+        )
+        if item.fiscal_period and item.fiscal_period not in grouped["fiscal_period_ids"]:
+            grouped["fiscal_period_ids"].append(item.fiscal_period)
+        for block_id in block_ids:
+            if (
+                block_id in selected_passage_ids
+                and block_id not in grouped["evidence_block_ids"]
+            ):
+                grouped["evidence_block_ids"].append(block_id)
+    validated_revisions = [grouped_revisions[key] for key in sorted(grouped_revisions)]
+
+    def rendered(selected: tuple[CandidatePassage, ...]) -> list[dict[str, str]]:
+        return [{"block_id": item.block_id, "text": item.text} for item in selected]
+
+    context = tuple(
+        item
+        for item in passages
+        if any(
+            reason.startswith("direct_context:")
+            or (reason.startswith("signal:") and any(signal in reason for signal in ("timing", "management", "coverage")))
+            for reason in item.reasons
+        )
+    )
+    context_ids = {item.block_id for item in context}
+    rationale = tuple(
+        item
+        for item in passages
+        if item.block_id not in context_ids
+        and any(
+            reason.startswith(("revision_evidence", "adjacent_to_revision", "direct_causal_language", "nearby_revision_metric"))
+            or (reason.startswith("signal:") and any(signal in reason for signal in ("revision", "cause", "first_read")))
+            for reason in item.reasons
+        )
+    )
+    return {
+        "schema_version": "1.0",
+        "validated_revisions": validated_revisions,
+        "candidate_rationale_passages": rendered(rationale),
+        "candidate_context_passages": rendered(context),
+        "allowed_metric_ids": allowed_metrics,
+        "allowed_fiscal_period_ids": allowed_periods,
+    }
+
+
+def _agent_hosted_passages(
+    passages: tuple[CandidatePassage, ...],
+    revisions: RevisionResult,
+) -> tuple[CandidatePassage, ...]:
+    """Drop opening-only blocks so the host never receives unrelated report text."""
+    validated_revision_ids = {
+        block_id
+        for revision in revisions.revisions
+        for evidence in revision.evidence
+        for block_id in evidence.block_ids
+    }
+    selected: list[CandidatePassage] = []
+    for item in passages:
+        if DISCLOSURE_RE.search(item.text):
+            continue
+        signals = {
+            signal
+            for reason in item.reasons
+            if reason.startswith("signal:")
+            for signal in reason.removeprefix("signal:").split(",")
+        }
+        relevant = (
+            item.block_id in validated_revision_ids
+            or "direct_causal_language" in item.reasons
+            or any(reason.startswith("direct_context:") for reason in item.reasons)
+            or bool(signals & {"revision", "cause"})
+            or ("first_read" in signals and item.page_number <= 2 and len(item.text) <= 1_200)
+        )
+        if relevant:
+            if len(item.text) > 2_000:
+                item = replace(
+                    item,
+                    text=item.text[:2_000],
+                    reasons=tuple((*item.reasons, "truncated_for_agent_bundle")),
+                )
+            selected.append(item)
+    return tuple(selected)
+
+
 def _as_string(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
@@ -520,18 +666,51 @@ def _claim_supported(text: str, ids: tuple[str, ...], blocks: Mapping[str, Evide
     evidence_numbers = {item.replace(",", ".") for item in NUMBER_RE.findall(evidence)}
     if not claim_numbers.issubset(evidence_numbers):
         return False
-    claim_tokens = {token.casefold() for token in TOKEN_RE.findall(text)} - STOPWORDS
-    evidence_tokens = {token.casefold() for token in TOKEN_RE.findall(evidence)}
+    if not _effect_polarity_supported(text, evidence):
+        return False
+    claim_tokens = _semantic_tokens(text) - STOPWORDS
+    evidence_tokens = _semantic_tokens(evidence)
     overlap = claim_tokens & evidence_tokens
     required_overlap = max(1, (len(claim_tokens) + 1) // 2)
     return not claim_tokens or len(overlap) >= required_overlap
 
 
+def _effect_polarities(text: str) -> frozenset[str]:
+    values: set[str] = set()
+    if POSITIVE_EFFECT_RE.search(text):
+        values.add("positive")
+    if NEGATIVE_EFFECT_RE.search(text):
+        values.add("negative")
+    return frozenset(values)
+
+
+def _effect_polarity_supported(claim: str, evidence: str) -> bool:
+    claim_polarities = _effect_polarities(claim)
+    if not claim_polarities:
+        return True
+    return claim_polarities.issubset(_effect_polarities(evidence))
+
+
+def _effect_neutral_text(text: str) -> str:
+    neutral = POSITIVE_EFFECT_RE.sub(" effect ", text.casefold())
+    neutral = NEGATIVE_EFFECT_RE.sub(" effect ", neutral)
+    return " ".join(neutral.split())
+
+
+def _semantic_tokens(text: str) -> set[str]:
+    tokens = {token.casefold() for token in TOKEN_RE.findall(text)}
+    for token in tuple(tokens):
+        tokens.update(TOKEN_EXPANSIONS.get(token, ()))
+    if POSITIVE_EFFECT_RE.search(text):
+        tokens.add("positive_effect")
+    if NEGATIVE_EFFECT_RE.search(text):
+        tokens.add("negative_effect")
+    return tokens
+
+
 def _claim_confidence(text: str, ids: tuple[str, ...], blocks: Mapping[str, EvidenceBlock]) -> str:
-    evidence_tokens = {
-        token.casefold() for token in TOKEN_RE.findall(_evidence_text(ids, blocks))
-    }
-    claim_tokens = {token.casefold() for token in TOKEN_RE.findall(text)} - STOPWORDS
+    evidence_tokens = _semantic_tokens(_evidence_text(ids, blocks))
+    claim_tokens = _semantic_tokens(text) - STOPWORDS
     ratio = len(claim_tokens & evidence_tokens) / max(1, len(claim_tokens))
     if len(ids) == 1 and ratio >= 0.8:
         return "high"
@@ -543,11 +722,15 @@ def _claim_confidence(text: str, ids: tuple[str, ...], blocks: Mapping[str, Evid
 def _sentence_causal_support(
     driver: str, evidence: str, pattern: re.Pattern[str]
 ) -> bool:
-    driver_tokens = {token.casefold() for token in TOKEN_RE.findall(driver)} - STOPWORDS
-    for sentence in re.split(r"(?:[.!?]\s+|\n+)", evidence):
+    driver_tokens = _semantic_tokens(driver) - STOPWORDS
+    normalized_evidence = re.sub(r"\s*\n\s*", " ", evidence)
+    normalized_evidence = re.sub(r"\bvs\.", "vs", normalized_evidence, flags=re.I)
+    normalized_evidence = re.sub(r"\be\.g\.", "eg", normalized_evidence, flags=re.I)
+    normalized_evidence = re.sub(r"\bi\.e\.", "ie", normalized_evidence, flags=re.I)
+    for sentence in re.split(r"[.!?]\s+", normalized_evidence):
         if not pattern.search(sentence):
             continue
-        sentence_tokens = {token.casefold() for token in TOKEN_RE.findall(sentence)}
+        sentence_tokens = _semantic_tokens(sentence)
         if len(driver_tokens & sentence_tokens) >= max(1, (len(driver_tokens) + 1) // 2):
             return True
     return False
@@ -645,6 +828,8 @@ def _validate_model_output(
     if len(warnings) != len(raw_warnings):
         warnings.append("invalid_model_warning_removed")
     drivers: list[Driver] = []
+    driver_keys: set[tuple[Any, ...]] = set()
+    driver_scope_polarities: dict[tuple[Any, ...], set[str]] = {}
     raw_drivers = raw.get("drivers")
     if not isinstance(raw_drivers, list):
         raise ModelResponseError("drivers must be a JSON array")
@@ -683,10 +868,11 @@ def _validate_model_output(
             metric for block_id in ids
             if (metric := normalize_metric(validation_blocks[block_id].text)[0]) is not None
         }
+        allowed_metrics = {revision.metric for revision in revisions.revisions}
         metrics: list[str] = []
         for metric in _string_tuple(item.get("impacted_metrics")):
             canonical = normalize_metric(metric)[0] or metric.casefold().replace(" ", "_")
-            if canonical in evidence_metrics:
+            if canonical in evidence_metrics and canonical in allowed_metrics:
                 metrics.append(canonical)
             else:
                 warnings.append("unsupported_impacted_metric_removed")
@@ -694,10 +880,13 @@ def _validate_model_output(
             period for match in re.finditer(r"(?:FY|CY)?\s*(?:20\d{2}|\d{2})[Ee]?|[1-4]Q\s*(?:20\d{2}|\d{2})[Ee]?|[12]H\s*(?:20\d{2}|\d{2})[Ee]?", evidence_text, re.I)
             if (period := normalize_fiscal_period(match.group(0))[0]) is not None
         }
+        allowed_periods = {
+            revision.fiscal_period for revision in revisions.revisions if revision.fiscal_period
+        }
         periods: list[str] = []
         for period_text in _string_tuple(item.get("fiscal_periods")):
             period = normalize_fiscal_period(period_text)[0]
-            if period and period in evidence_periods:
+            if period and period in evidence_periods and period in allowed_periods:
                 periods.append(period)
             else:
                 warnings.append("unsupported_fiscal_period_removed")
@@ -726,6 +915,20 @@ def _validate_model_output(
             continue
         metric_tuple = tuple(dict.fromkeys(metrics))
         period_tuple = tuple(dict.fromkeys(periods))
+        driver_key = (
+            " ".join(text.casefold().split()), metric_tuple, period_tuple, ids
+        )
+        if driver_key in driver_keys:
+            warnings.append("duplicate_driver_removed")
+            continue
+        scope = (metric_tuple, period_tuple, ids, _effect_neutral_text(text))
+        polarities = set(_effect_polarities(text))
+        prior_polarities = driver_scope_polarities.get(scope, set())
+        if polarities and prior_polarities and polarities.isdisjoint(prior_polarities):
+            warnings.append("contradictory_driver_removed")
+            continue
+        driver_keys.add(driver_key)
+        driver_scope_polarities.setdefault(scope, set()).update(polarities)
         drivers.append(
             Driver(
                 driver=text,
@@ -836,6 +1039,8 @@ def _validate_model_output(
             warnings.append("unsupported_jargon_definition_removed")
 
     items: list[GroundedClaim] = []
+    item_keys: set[tuple[str, tuple[str, ...]]] = set()
+    item_scope_polarities: dict[tuple[str, ...], set[str]] = {}
     raw_items = raw.get("important_first_read_items")
     if not isinstance(raw_items, list):
         raise ModelResponseError("important_first_read_items must be a JSON array")
@@ -845,6 +1050,18 @@ def _validate_model_output(
         claim, claim_warnings = _parse_claim(item, selected_ids, validation_blocks)
         warnings.extend(claim_warnings)
         if claim:
+            key = (" ".join(claim.text.casefold().split()), claim.evidence_block_ids)
+            if key in item_keys:
+                warnings.append("duplicate_first_read_claim_removed")
+                continue
+            polarities = set(_effect_polarities(claim.text))
+            scope = (*claim.evidence_block_ids, _effect_neutral_text(claim.text))
+            prior_polarities = item_scope_polarities.get(scope, set())
+            if polarities and prior_polarities and polarities.isdisjoint(prior_polarities):
+                warnings.append("contradictory_first_read_claim_removed")
+                continue
+            item_keys.add(key)
+            item_scope_polarities.setdefault(scope, set()).update(polarities)
             items.append(claim)
 
     clarity = raw.get("rationale_clarity") if raw.get("rationale_clarity") in RATIONALE_CLARITIES else "unclear"
@@ -895,7 +1112,8 @@ class RationaleExtractor:
         context_signals = detect_context_signals(passages)
         payload = _model_payload(document, revisions, passages, context_signals)
         character_count = sum(len(item["text"]) for item in payload["evidence_passages"])
-        if no_model:
+        mode = "api" if self.model is not None and not no_model else resolve_model_mode(no_model=no_model)
+        if mode == "none":
             return RationaleResult(
                 status="retrieval_only",
                 document_id=document.document_id,
@@ -907,6 +1125,11 @@ class RationaleExtractor:
                 model_input_block_count=len(passages),
                 model_input_character_count=character_count,
                 warnings=("semantic_interpretation_skipped",),
+            )
+        if mode == "agent-hosted":
+            raise ModelConfigurationError(
+                "agent-hosted mode requires the two-stage `find-rpt agent prepare` and "
+                "`find-rpt agent finalize` workflow"
             )
         model = self.model or LocalOpenAICompatibleRationaleModel.from_environment()
         try:
@@ -937,6 +1160,68 @@ class RationaleExtractor:
                 model_input_block_count=len(passages),
                 model_input_character_count=character_count,
                 warnings=("model_failure:unexpected_provider_or_validation_error",),
+            )
+        return RationaleResult(
+            status="interpreted",
+            document_id=document.document_id,
+            source_filename=document.source_filename,
+            revision_status=revisions.status,
+            candidate_passages=passages,
+            context_signals=context_signals,
+            extraction=extraction,
+            model_input_block_count=len(passages),
+            model_input_character_count=character_count,
+            warnings=(),
+        )
+
+    def prepare_agent(
+        self,
+        document: EvidenceDocument,
+        *,
+        revisions: RevisionResult | None = None,
+        broker: str | None = None,
+    ) -> tuple[dict[str, Any], tuple[CandidatePassage, ...], tuple[str, ...]]:
+        revisions = revisions or RevisionExtractor().extract(document, broker=broker)
+        if revisions.document_id != document.document_id:
+            raise RationaleInputError(
+                "revision data does not belong to the selected evidence document"
+            )
+        passages = _agent_hosted_passages(self.selector.select(document, revisions), revisions)
+        return (
+            agent_evidence_bundle(document, revisions, passages),
+            passages,
+            detect_context_signals(passages),
+        )
+
+    def validate_agent_output(
+        self,
+        document: EvidenceDocument,
+        semantic_output: Mapping[str, Any],
+        *,
+        revisions: RevisionResult | None = None,
+        broker: str | None = None,
+    ) -> RationaleResult:
+        revisions = revisions or RevisionExtractor().extract(document, broker=broker)
+        _, passages, context_signals = self.prepare_agent(
+            document, revisions=revisions, broker=broker
+        )
+        character_count = sum(len(item.text) for item in passages)
+        try:
+            extraction = _validate_model_output(
+                semantic_output, document, revisions, passages, context_signals
+            )
+        except ModelResponseError as error:
+            return RationaleResult(
+                status="validation_error",
+                document_id=document.document_id,
+                source_filename=document.source_filename,
+                revision_status=revisions.status,
+                candidate_passages=passages,
+                context_signals=context_signals,
+                extraction=None,
+                model_input_block_count=len(passages),
+                model_input_character_count=character_count,
+                warnings=(f"agent_semantic_validation_failed:{error}",),
             )
         return RationaleResult(
             status="interpreted",

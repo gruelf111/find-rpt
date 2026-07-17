@@ -1,5 +1,19 @@
 # Retrieval, evidence, revision, bounded-rationale, citation, brief, and escalation evaluation
 
+## Agent-hosted semantic boundary evaluation (2026-07-18)
+
+Nineteen synthetic integration tests exercise the Codex-hosted prepare/finalize boundary. Prepare output is asserted to contain only safe identity metadata, grouped validated revision identifiers, bounded rationale/context passages, stable block IDs, metric/period allowlists, address-free analyst candidates, and warnings; it contains no page-number field or absolute path. Finalize accepts the existing exact rationale schema and rebuilds deterministic document state before validation and rendering.
+
+The suite covers valid semantic JSON, same-shape IDs from another report, invented IDs/pages/values/percentages/periods/metrics/names/emails, unsupported management/context/causal claims, malformed JSON, missing fields, duplicate and inverted claims, no revisions, partial and unclear rationale, escalation, retrieval failure, sanitized citation-cache failure, viewer unavailability, final cited rendering, and a network-call trap proving that neither agent-hosted stage invokes the external model provider. Invalid items are removed and appear as warnings; malformed semantic JSON still returns a cited partial brief containing deterministic revisions. The API-provider tests remain in place for optional standalone mode.
+
+These tests establish orchestration and post-host validation behavior, not real-report semantic accuracy. Real agent-hosted accuracy still requires local manual review of complete briefs. No report text, page render, real name/address, or generated real brief was added to the repository.
+
+The prepare command was measured in memory across all 12 retrieval evaluation cases after compactness fixes. All 12 selected the expected report and none leaked an absolute path. Bundle size averaged 8,284.5 bytes and peaked at 17,650 bytes; bounded passage text averaged 4,971 characters and peaked at 9,469 characters. The largest cases were table-heavy reports with 16 and 28 grouped metric/direction revision entries, but no bundle exceeded the 12,000-character unique-passage cap.
+
+One real agent-hosted invocation used an English date and a broker containing spaces with `FIND_RPT_MODEL_API_KEY` unset. The active Codex agent interpreted only the prepare bundle. Finalize returned `found`, `clear`, one deterministic revision row, four valid citations, no warning, and `sent: false`. All citation URLs returned HTTP 200; the rationale citation was visually checked in the loopback viewer and highlighted the exact source passage. A punctuation-bearing ticker control returned transparent `not_found`. Genuine real partial/unclear reports were not relabelled for testing; those states and analyst escalation remain synthetic acceptance cases.
+
+Final verification discovered 167 tests and completed with no failure or error; the 19 focused agent-hosted tests and 19 rationale tests passed explicitly. Python compilation, dependency consistency, the seven-check smoke test, the Codex skill validator, diff whitespace checks, prohibited-send scanning, tracked-PDF scanning, and ignored-artifact cleanup passed. No lint or static-type tool is configured. The 174-source name/size/content manifest remained identical before and after the review.
+
 Evaluation dates: 2026-07-16 through 2026-07-17
 
 ## Scope

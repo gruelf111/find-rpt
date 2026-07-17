@@ -25,6 +25,7 @@ SCHEMA_VERSION = "1.0"
 DEFAULTS: dict[str, object] = {
     "corpus_path": "corpus",
     "cache_path": ".cache/find-rpt/citations",
+    "model_mode": "api",
     "model_provider": "local-openai-compatible",
     "model_name": "local-rationale-model",
     "model_url": "http://127.0.0.1:11434/v1/chat/completions",
@@ -36,6 +37,7 @@ DEFAULTS: dict[str, object] = {
 ENVIRONMENT = {
     "corpus_path": "FIND_RPT_CORPUS",
     "cache_path": "FIND_RPT_CACHE_DIR",
+    "model_mode": "FIND_RPT_MODEL_MODE",
     "model_provider": "FIND_RPT_MODEL_PROVIDER",
     "model_name": "FIND_RPT_MODEL_NAME",
     "model_url": "FIND_RPT_MODEL_URL",
@@ -76,6 +78,7 @@ class Settings:
     citation_viewer_host: str
     citation_viewer_port: int
     no_model: bool
+    model_mode: str = "api"
 
     @property
     def citation_base_url(self) -> str:
@@ -176,13 +179,19 @@ def load_settings(
             values[field] = value
 
     no_model = _parse_bool(values["no_model"], field="no_model")
+    model_mode = str(values["model_mode"]).strip().casefold()
+    if model_mode not in {"agent-hosted", "api", "none"}:
+        raise ConfigurationError("model_mode must be agent-hosted, api, or none")
     provider = str(values["model_provider"]).strip().casefold()
     if provider == "none":
         no_model = True
+        model_mode = "none"
     elif provider != "local-openai-compatible":
         raise ConfigurationError(
             "model_provider must be local-openai-compatible or none; external providers are unsupported"
         )
+    if model_mode == "none":
+        no_model = True
     host = str(values["citation_viewer_host"]).strip()
     try:
         if not ipaddress.ip_address(socket.gethostbyname(host)).is_loopback:
@@ -225,6 +234,7 @@ def load_settings(
         citation_viewer_host=host,
         citation_viewer_port=port,
         no_model=no_model,
+        model_mode=model_mode,
     )
 
 
@@ -339,6 +349,7 @@ def execute_request(
     child_env = dict(os.environ if environment is None else environment)
     child_env["FIND_RPT_MODEL_NAME"] = settings.model_name
     child_env["FIND_RPT_MODEL_URL"] = settings.model_url
+    child_env["FIND_RPT_MODEL_MODE"] = settings.model_mode
     if settings.model_api_key_env in child_env:
         child_env["FIND_RPT_MODEL_API_KEY"] = child_env[settings.model_api_key_env]
     try:
@@ -436,6 +447,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--corpus", dest="corpus_path")
     parser.add_argument("--cache-dir", dest="cache_path")
     parser.add_argument("--model-provider")
+    parser.add_argument("--model-mode", choices=("agent-hosted", "api", "none"))
     parser.add_argument("--model-name")
     parser.add_argument("--model-url")
     parser.add_argument("--model-api-key-env")

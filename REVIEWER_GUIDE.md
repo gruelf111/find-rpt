@@ -14,7 +14,7 @@ $env:FIND_RPT_CORPUS = (Resolve-Path corpus).Path
 $env:FIND_RPT_NO_MODEL = 'true'
 ```
 
-This is the fastest deterministic setup. The corpus defaults to `corpus/`; the explicit environment variable makes that choice visible. No-model mode produces a transparent partial brief and never fabricates rationale, context, or escalation. For a complete semantic brief, instead configure the loopback-only model settings in `README.md`; never use a remote endpoint.
+This is the fastest deterministic setup. The corpus defaults to `corpus/`; the explicit environment variable makes that choice visible. No-model mode produces a transparent partial brief and never fabricates rationale, context, or escalation. For a complete semantic brief, use the installed Codex skill's agent-hosted flow. Standalone CLI review must instead configure the loopback-only API settings in `README.md`; never use a remote endpoint.
 
 ## 2. Run the automated gates
 
@@ -73,6 +73,16 @@ With the viewer running, open one inline citation from the successful local comm
 
 ## 5. Complete the semantic acceptance gate
 
+First run the synthetic agent-hosted boundary suite:
+
+```powershell
+& $python -m unittest tests.test_agent_hosted -v
+```
+
+It covers valid agent JSON, invented block IDs, unsupported numbers, unsupported names, malformed JSON, partial and unclear rationale, final rendering, and the absence of an external model call. To inspect the boundary manually without exposing report output, run `find-rpt agent prepare ... --format json`, create strict semantic JSON from only that bundle, and pipe it to `find-rpt agent finalize ... --input - --format agent-json`. Confirm that prepare contains no page numbers, citation URLs, bounding boxes, or unrelated report text, and that only finalizer-produced Markdown is displayed.
+
+For the literal no-key Codex path, unset `FIND_RPT_MODEL_API_KEY`, invoke `/find-rpt {ticker} {date} {broker}`, and confirm the skill runs the two commands above. English dates such as `11 May 2026`, punctuation-bearing tickers, and brokers containing spaces are supported. A complete result must have `citation_viewer_available: true` when the matching viewer is running; otherwise it must be `partial` with `citation_viewer_unavailable`.
+
 The synthetic review-only escalation path is reproducible without report content:
 
 ```powershell
@@ -80,7 +90,7 @@ The synthetic review-only escalation path is reproducible without report content
 & $python -m unittest tests.test_escalation.RenderingAndSafetyTests.test_brief_surfaces_draft_last_and_stops -v
 ```
 
-For real semantic acceptance, configure a loopback-only rationale model, then manually inspect at least three complete real briefs. Check every causal statement and context label against its inline evidence; reject unsupported claims. Include an honestly identified partial or unclear report if one exists. If none exists, record that corpus limitation and rely on the synthetic escalation suite for behavior coverage rather than relabelling a clear report. This real-model step was not completed in the recorded evaluation.
+For real semantic acceptance, run the skill inside Codex (agent-hosted, no API key) or configure standalone `FIND_RPT_MODEL_MODE=api` with a loopback-only rationale model, then manually inspect at least three complete real briefs. Check every causal statement and context label against its inline evidence; reject unsupported claims. Include an honestly identified partial or unclear report if one exists. If none exists, record that corpus limitation and rely on the synthetic escalation suite rather than relabelling a clear report. Standalone use without API mode must pass `--no-model` or set `FIND_RPT_MODEL_MODE=none`.
 
 ## 6. Privacy and release checks
 

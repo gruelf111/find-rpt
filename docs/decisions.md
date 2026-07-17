@@ -1,5 +1,17 @@
 # Implementation decisions
 
+## 2026-07-18 - Active Codex agent as an optional semantic host
+
+The semantic boundary supports three explicit modes: `agent-hosted`, `api`, and `none`. The Codex skill defaults to `agent-hosted`; direct standalone commands use the retained loopback OpenAI-compatible provider only in `api` mode with `FIND_RPT_MODEL_API_KEY`, or emit transparent partial output in `none`/`--no-model` mode. A one-shot standalone command cannot impersonate an active Codex host.
+
+Agent-hosted execution is deliberately two-stage. `agent prepare` performs selection, PDF extraction, revision extraction and arithmetic, and bounded passage retrieval, then emits only validated revisions, rationale/context candidates, stable block IDs, and closed metric/period allowlists. It omits page numbers, geometry, citation identifiers and URLs, and unrelated text. The host returns the existing exact rationale JSON schema. `agent finalize` repeats deterministic selection/extraction from the original query, extracts covering analysts, validates IDs, names, numbers, metrics, periods, contexts, and causal claims, removes unsupported items, constructs citations, and renders the brief.
+
+Alternatives rejected were exposing a general model callback from Python, embedding report text in a reusable session file, trusting the host to construct citations, and silently falling back to prose after validation failure. They weaken provenance or create hidden state. Re-running deterministic steps at finalize is intentionally redundant and makes the final command independently authoritative. Malformed or partly unsupported semantic output yields a warning-bearing partial brief.
+
+Verification uses synthetic reports only and covers valid output, invented IDs, unsupported numbers and names, malformed JSON, partial/unclear rationale, final rendering, and a patched network call that must remain unused in agent-hosted mode. Existing retrieval, arithmetic, citation, and no-send implementations are reused unchanged.
+
+The final adversarial review tightened the boundary further. Revision rows are grouped to metric/direction/period identifiers because the host does not need authoritative values; passages are deduplicated between rationale and context lists; deterministic analyst candidates omit email addresses; and direct agent finalization checks viewer health. English-date normalization occurs before the unchanged retrieval engine. Deterministic token equivalence permits supported translations such as broker shorthand for target price while polarity checks reject inverted effects.
+
 ## 2026-07-16 - First retrieval slice
 
 ### Bounded inspection

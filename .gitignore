@@ -30,6 +30,7 @@ ENV/
 *.citations.json
 *.citations.csv
 *.citations.md
+*.semantic-output.json
 
 # Secrets and local configuration
 .env

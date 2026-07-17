@@ -259,7 +259,9 @@ class PackagingFilesTests(unittest.TestCase):
         claude = (ROOT / ".claude" / "commands" / "find-rpt.md").read_text(encoding="utf-8")
         launcher_text = LAUNCHER.read_text(encoding="utf-8")
         self.assertIn("python -m find_rpt", skill)
-        self.assertIn("<skill-directory>/scripts/find_rpt.py", skill)
+        self.assertIn("agent prepare", skill)
+        self.assertIn("agent finalize", skill)
+        self.assertIn("--input -", skill)
         self.assertNotIn("python skills/find-rpt/scripts/find_rpt.py", skill)
         self.assertIn("skills/find-rpt/scripts/find_rpt.py", claude)
         for forbidden in ("PdfEvidenceExtractor", "RevisionExtractor", "RationaleExtractor", "CitationBuilder"):
