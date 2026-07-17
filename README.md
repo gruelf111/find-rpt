@@ -125,7 +125,9 @@ Brief citations link to this loopback server. Each citation validates the source
 
 ## Enable the Codex skill
 
-The packaged skill is in `skills/find-rpt/`. Install that directory into the personal Codex skills directory and restart or reload Codex. The Python package must be installed in the interpreter Codex invokes.
+The canonical repository-local skill is `.agents/skills/find-rpt/SKILL.md`. Open this repository root in Codex so it discovers the skill, then invoke it exactly as `$find-rpt {ticker} {date} {broker}`. The Python package must be installed in the interpreter Codex invokes.
+
+Optional personal installation copies the same repository-local package into the personal Codex skills directory:
 
 PowerShell:
 
@@ -133,20 +135,20 @@ PowerShell:
 $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex' }
 $skillsDir = Join-Path $codexHome 'skills'
 New-Item -ItemType Directory -Force $skillsDir | Out-Null
-Copy-Item -Recurse skills\find-rpt (Join-Path $skillsDir 'find-rpt')
+Copy-Item -Recurse .agents\skills\find-rpt (Join-Path $skillsDir 'find-rpt')
 ```
 
 Direct deterministic no-model launcher check:
 
 ```powershell
-python skills/find-rpt/scripts/find_rpt.py --command '/find-rpt SHA0 GY 2026-06-22 "Kepler Cheuvreux"' --no-model
+python .agents/skills/find-rpt/scripts/find_rpt.py --command '/find-rpt SHA0 GY 2026-06-22 "Kepler Cheuvreux"' --no-model
 ```
 
 Example Codex commands:
 
 ```text
-/find-rpt SHA0 GY 2026-06-22 "Kepler Cheuvreux"
-/find-rpt BP/ LN 22 Jun 2026 "J.P. Morgan"
+$find-rpt SHA0 GY 2026-06-22 "Kepler Cheuvreux"
+$find-rpt BP/ LN 22 Jun 2026 "J.P. Morgan"
 ```
 
 The skill runs the two-stage agent-hosted flow and displays only the final Python renderer's Markdown. It never displays or rewrites the intermediate evidence bundle or semantic JSON.
@@ -260,7 +262,7 @@ Current release evidence, limitations, and acceptance status are in:
 
 ```text
 src/find_rpt/                 authoritative Python pipeline
-skills/find-rpt/              packaged Codex skill and thin launcher
+.agents/skills/find-rpt/      repository-local Codex skill and thin launcher
 .claude/commands/             optional Claude Code wrapper
 tests/                        synthetic and safe real-corpus regression metadata
 docs/                         requirements, discovery, decisions, evaluation

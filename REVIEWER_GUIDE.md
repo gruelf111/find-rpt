@@ -41,13 +41,13 @@ Back in the first terminal, run the seven-check smoke test:
 & $python scripts/smoke_test.py
 ```
 
-Install the Codex skill and restart or reload Codex:
+The canonical repository-local Codex skill is `.agents/skills/find-rpt/SKILL.md`. Open the repository root in Codex to discover it. Optional personal installation copies that same package:
 
 ```powershell
 $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex' }
 $skillsDir = Join-Path $codexHome 'skills'
 New-Item -ItemType Directory -Force $skillsDir | Out-Null
-Copy-Item -Recurse -Force skills\find-rpt (Join-Path $skillsDir 'find-rpt')
+Copy-Item -Recurse -Force .agents\skills\find-rpt (Join-Path $skillsDir 'find-rpt')
 ```
 
 The package must also be installed in the Python interpreter that Codex invokes. The isolated `$python` environment below proves packaging and the direct launcher; if Codex uses another interpreter, install the local project into that interpreter before reloading the skill.
@@ -55,14 +55,14 @@ The package must also be installed in the Python interpreter that Codex invokes.
 Invoke an authorized known corpus query:
 
 ```text
-/find-rpt {ticker} {date} {broker}
+$find-rpt {ticker} {date} {broker}
 ```
 
 Before using the Codex UI, the same packaged launcher can be checked directly:
 
 ```powershell
-& $python skills/find-rpt/scripts/find_rpt.py --command '/find-rpt SHA0 GY 2026-06-22 "Kepler Cheuvreux"' --no-model
-& $python skills/find-rpt/scripts/find_rpt.py --command '/find-rpt ZZZZ LN 2026-05-11 "BofA Global Research"' --no-model
+& $python .agents/skills/find-rpt/scripts/find_rpt.py --command '/find-rpt SHA0 GY 2026-06-22 "Kepler Cheuvreux"' --no-model
+& $python .agents/skills/find-rpt/scripts/find_rpt.py --command '/find-rpt ZZZZ LN 2026-05-11 "BofA Global Research"' --no-model
 ```
 
 The first command should select one report and return a transparent partial brief. The second should return `not_found`. These commands also exercise a broker containing spaces. Punctuation and alternative-date parsing are covered by the automated package tests and can be checked with `BP/ LN` and `22 Jun 2026` when an authorized matching query is available. Every output state must retain `sent: false`.
