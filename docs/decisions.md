@@ -358,4 +358,4 @@ Agent JSON is serialized with ASCII escapes at the outer transport boundary. Thi
 
 ### Clean-environment build isolation
 
-Fresh installs use pip's normal PEP 517 build isolation. The clean-install packaging test must not pass `--no-build-isolation`, because that option makes undeclared packages in the invoking environment responsible for backend commands such as wheel building. `setuptools>=69` remains the complete declared build backend; `wheel` is not a runtime dependency, and the standard-library test suite does not require a project `dev` extra.
+Fresh installs use pip's normal PEP 517 build isolation. The clean-install packaging test must not pass `--no-build-isolation`, because that option makes undeclared packages in the invoking environment responsible for backend commands such as wheel building. `setuptools>=69` remains the complete declared build backend, and `wheel` is not a runtime dependency. The `dev` extra contains pytest, the only separately installed development tool the repository uses; no lint or static-type tool is configured.

@@ -42,7 +42,7 @@ PowerShell:
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -e .
+python -m pip install -e ".[dev]"
 ```
 
 POSIX shell:
@@ -51,10 +51,10 @@ POSIX shell:
 python3.11 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e .
+python -m pip install -e ".[dev]"
 ```
 
-Installation provides both `find-rpt` and `python -m find_rpt`.
+The `dev` extra installs pytest for repository development and verification. Runtime-only installation uses `python -m pip install .`. Installation provides both `find-rpt` and `python -m find_rpt`.
 
 ## Corpus and configuration
 

@@ -176,3 +176,8 @@
 - Removed the reviewer guide's manual setuptools preinstallation workaround and updated the documented syntax-check path to cover the canonical `.agents` skill. The README continues to document `pip install -e .`; no `dev` extra is documented or needed for the standard-library test suite.
 - In pristine Python 3.11.9 environments containing only pip 24.0 and setuptools 65.5.0 initially, the exact README `pip install -e .` workflow and reviewer `pip install .` command both completed through isolated builds without a preinstalled `wheel`. The focused clean-install test and dependency checks passed.
 - Focused packaging tests passed 18/18 with 3 subtests, and the complete pytest suite passed 168/168 with 111 subtests. No separate lint or static-type command is configured.
+
+## 2026-07-18 - Development dependency extra
+
+- Defined the `dev` optional dependency with pytest only, keeping it separate from the unchanged runtime dependencies. Updated the clean-checkout and reviewer workflows to install the editable project with `.[dev]`; no unused lint or static-type package was added.
+- In a pristine Python 3.11.9 virtual environment, `pip install -e ".[dev]"` installed pytest 9.1.1 without the prior missing-extra warning. Dependency consistency passed, and the complete pytest suite passed 168/168 with 111 subtests.

@@ -9,6 +9,9 @@ description = "Deterministic local retrieval for a sell-side research PDF corpus
 requires-python = ">=3.11"
 dependencies = ["pypdf>=6,<7", "PyMuPDF>=1.26,<2"]
 
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
 [project.scripts]
 find-rpt = "find_rpt.cli:main"
 
